@@ -18,12 +18,12 @@ import { toast } from 'sonner';
 
 const Dashboard: React.FC = () => {
   const { user, userProfile, logout, loading } = useAuth();
-  const { projects, setCurrentProject, deleteProject } = useProjects();
+  const { projects, setCurrentProject, deleteProject, isLoading } = useProjects();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -46,9 +46,8 @@ const Dashboard: React.FC = () => {
     navigate(`/editor/${project.id}`);
   };
 
-  const handleDeleteProject = (id: string) => {
-    deleteProject(id);
-    toast.success('Project deleted');
+  const handleDeleteProject = async (id: string) => {
+    await deleteProject(id);
   };
 
   const filteredProjects = projects.filter(p => 
