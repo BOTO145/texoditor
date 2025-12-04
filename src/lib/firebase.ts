@@ -2,14 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// Firebase configuration - replace with your own config
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "your-api-key",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "your-project-id",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789:web:abcdef"
+  apiKey: "AIzaSyBcnLvJSaGfgQnnWUQ9Zy5pxYVJhMDYtkY",
+  authDomain: "texoditor.firebaseapp.com",
+  projectId: "texoditor",
+  storageBucket: "texoditor.firebasestorage.app",
+  messagingSenderId: "1073837608622",
+  appId: "1:1073837608622:web:02f0071c04005ce7e4e73f",
+  measurementId: "G-MBG24EJ726"
 };
 
 const app = initializeApp(firebaseConfig);
