@@ -44,9 +44,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        const profileDoc = await getDoc(doc(db, 'users', user.uid));
-        if (profileDoc.exists()) {
-          setUserProfile(profileDoc.data() as UserProfile);
+        try {
+          const profileDoc = await getDoc(doc(db, 'users', user.uid));
+          if (profileDoc.exists()) {
+            setUserProfile(profileDoc.data() as UserProfile);
+          } else {
+            // Fallback profile if Firestore doc doesn't exist
+            setUserProfile({
+              uid: user.uid,
+              email: user.email || '',
+              username: user.email?.split('@')[0] || 'user',
+              createdAt: new Date(),
+            });
+          }
+        } catch (error) {
+          console.warn('Firestore unavailable, using fallback profile:', error);
+          // Fallback when Firestore is not available
+          setUserProfile({
+            uid: user.uid,
+            email: user.email || '',
+            username: user.email?.split('@')[0] || 'user',
+            createdAt: new Date(),
+          });
         }
       } else {
         setUserProfile(null);
