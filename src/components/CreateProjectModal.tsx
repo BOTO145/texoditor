@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useProjects, SheetType } from '@/contexts/ProjectContext';
 import { toast } from 'sonner';
-import { AlignLeft, Grid3X3, LayoutGrid, Check } from 'lucide-react';
+import { AlignLeft, Grid3X3, LayoutGrid, Check, Loader2 } from 'lucide-react';
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -41,20 +41,26 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ open, onOpenCha
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [sheetType, setSheetType] = useState<SheetType>('single-lined');
+  const [isCreating, setIsCreating] = useState(false);
   const { createProject } = useProjects();
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!name.trim()) {
       toast.error('Please enter a project name');
       return;
     }
 
-    createProject(name, description, sheetType);
-    toast.success('Project created successfully!');
-    onOpenChange(false);
-    setName('');
-    setDescription('');
-    setSheetType('single-lined');
+    setIsCreating(true);
+    const projectId = await createProject(name, description, sheetType);
+    setIsCreating(false);
+    
+    if (projectId) {
+      toast.success('Project created successfully!');
+      onOpenChange(false);
+      setName('');
+      setDescription('');
+      setSheetType('single-lined');
+    }
   };
 
   return (
@@ -114,11 +120,12 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ open, onOpenCha
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1" disabled={isCreating}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} className="flex-1">
-              Create Project
+            <Button onClick={handleCreate} className="flex-1" disabled={isCreating}>
+              {isCreating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {isCreating ? 'Creating...' : 'Create Project'}
             </Button>
           </div>
         </div>

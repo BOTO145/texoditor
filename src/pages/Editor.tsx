@@ -29,24 +29,33 @@ const Editor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const { projects, currentProject, setCurrentProject, updateProject } = useProjects();
+  const { projects, currentProject, setCurrentProject, updateProject, isLoading } = useProjects();
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   useEffect(() => {
-    if (id && !currentProject) {
+    if (id && projects.length > 0) {
       const project = projects.find(p => p.id === id);
       if (project) {
         setCurrentProject(project);
         setContent(project.content);
       }
-    } else if (currentProject) {
-      setContent(currentProject.content);
     }
-  }, [id, projects, currentProject, setCurrentProject]);
+  }, [id, projects, setCurrentProject]);
 
-  if (loading) {
+  // Sync content when currentProject updates from real-time
+  useEffect(() => {
+    if (currentProject && currentProject.content !== content && !isSaving) {
+      // Only update if content changed externally (real-time sync)
+      const timeSinceLastSave = lastSaved ? Date.now() - lastSaved.getTime() : Infinity;
+      if (timeSinceLastSave > 3000) {
+        setContent(currentProject.content);
+      }
+    }
+  }, [currentProject?.content]);
+
+  if (loading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -58,25 +67,31 @@ const Editor: React.FC = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!currentProject) {
+  if (!isLoading && !currentProject && projects.length > 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">Project not found</p>
+          <p className="text-muted-foreground mb-4">Project not found or you don't have access</p>
           <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
         </div>
       </div>
     );
   }
 
-  const handleSave = () => {
+  if (!currentProject) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const handleSave = async () => {
     setIsSaving(true);
-    updateProject(currentProject.id, { content });
+    await updateProject(currentProject.id, { content });
     setLastSaved(new Date());
-    setTimeout(() => {
-      setIsSaving(false);
-      toast.success('Project saved');
-    }, 500);
+    setIsSaving(false);
+    toast.success('Project saved');
   };
 
   const handleSheetTypeChange = (value: SheetType) => {
@@ -90,14 +105,14 @@ const Editor: React.FC = () => {
   // Auto-save
   useEffect(() => {
     const timeout = setTimeout(() => {
-      if (content !== currentProject.content) {
+      if (currentProject && content !== currentProject.content) {
         updateProject(currentProject.id, { content });
         setLastSaved(new Date());
       }
     }, 2000);
 
     return () => clearTimeout(timeout);
-  }, [content, currentProject, updateProject]);
+  }, [content]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -139,10 +154,12 @@ const Editor: React.FC = () => {
             <CollaboratorsList
               projectId={currentProject.id}
               collaborators={currentProject.collaborators}
+              ownerId={currentProject.ownerId}
+              ownerUsername={currentProject.ownerUsername}
             />
 
             {/* Save button */}
-            <Button onClick={handleSave} size="sm" className="gap-2">
+            <Button onClick={handleSave} size="sm" className="gap-2" disabled={isSaving}>
               <Save className="h-4 w-4" />
               <span className="hidden sm:inline">Save</span>
             </Button>
