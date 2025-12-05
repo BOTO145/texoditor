@@ -26,7 +26,7 @@ const Logo: React.FC<LogoProps> = ({ size = 'md', showText = true }) => {
         <FileText className={`${sizeClasses[size]} text-primary relative z-10`} />
       </div>
       {showText && (
-        <span className={`${textSizes[size]} font-semibold tracking-tight`}>
+        <span className={`${textSizes[size]} font-serif font-semibold tracking-tight`}>
           <span className="text-foreground">Tex</span>
           <span className="gradient-text">oditor</span>
         </span>

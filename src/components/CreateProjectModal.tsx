@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -68,6 +69,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ open, onOpenCha
       <DialogContent className="glass sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Create New Project</DialogTitle>
+          <DialogDescription>Set up your new project with a name and sheet type.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
