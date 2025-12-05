@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["Source Sans 3", "system-ui", "sans-serif"],
+        serif: ["Playfair Display", "Georgia", "serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       colors: {
@@ -68,6 +69,14 @@ export default {
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
         online: "hsl(var(--online))",
+        // Cursor colors for collaboration
+        cursor: {
+          1: "hsl(var(--cursor-1))",
+          2: "hsl(var(--cursor-2))",
+          3: "hsl(var(--cursor-3))",
+          4: "hsl(var(--cursor-4))",
+          5: "hsl(var(--cursor-5))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

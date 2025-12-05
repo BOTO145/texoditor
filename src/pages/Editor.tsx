@@ -5,6 +5,7 @@ import { useProjects, SheetType } from '@/contexts/ProjectContext';
 import Logo from '@/components/Logo';
 import SheetEditor from '@/components/SheetEditor';
 import CollaboratorsList from '@/components/CollaboratorsList';
+import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -150,6 +151,9 @@ const Editor: React.FC = () => {
               ) : null}
             </div>
 
+            {/* Theme Toggle */}
+            <ThemeToggle />
+
             {/* Collaborators */}
             <CollaboratorsList
               projectId={currentProject.id}
@@ -206,6 +210,7 @@ const Editor: React.FC = () => {
           content={content}
           onChange={setContent}
           sheetType={currentProject.sheetType}
+          projectId={currentProject.id}
         />
       </main>
     </div>
