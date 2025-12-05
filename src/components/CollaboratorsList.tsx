@@ -7,6 +7,7 @@ import { Users, UserPlus, X, Circle, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -63,6 +64,7 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({
             <Users className="h-5 w-5 text-primary" />
             Collaborators
           </DialogTitle>
+          <DialogDescription>Manage who can access and edit this project.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
