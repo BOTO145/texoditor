@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
+import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, FileText, Users, Zap, Shield } from 'lucide-react';
 
@@ -52,9 +53,12 @@ const Index: React.FC = () => {
       <header className="relative z-10 px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Logo />
-          <Button variant="ghost" onClick={() => navigate('/auth')}>
-            Sign In
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="ghost" onClick={() => navigate('/auth')}>
+              Sign In
+            </Button>
+          </div>
         </div>
       </header>
 
