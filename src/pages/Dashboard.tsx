@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/contexts/ProjectContext';
+import { useChat, ChatPanel, ChatNotification, NewChatModal } from '@/components/chat';
 import Logo from '@/components/Logo';
 import ProjectCard from '@/components/ProjectCard';
 import CreateProjectModal from '@/components/CreateProjectModal';
@@ -13,15 +14,21 @@ import {
   Search, 
   LogOut, 
   FolderOpen,
-  Sparkles 
+  Sparkles,
+  MessageCircle,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 const Dashboard: React.FC = () => {
   const { user, userProfile, logout, loading } = useAuth();
   const { projects, setCurrentProject, deleteProject, isLoading } = useProjects();
+  const { unreadTotal } = useChat();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [newChatOpen, setNewChatOpen] = useState(false);
   const navigate = useNavigate();
 
   if (loading || isLoading) {
@@ -58,12 +65,29 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Chat Notification */}
+      <ChatNotification onOpenChat={() => setChatOpen(true)} />
+
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Logo />
           
           <div className="flex items-center gap-3">
+            {/* Chat button */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setChatOpen(true)}
+              className="relative"
+            >
+              <MessageCircle className="h-4 w-4" />
+              {unreadTotal > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs font-medium rounded-full flex items-center justify-center">
+                  {unreadTotal > 9 ? '9+' : unreadTotal}
+                </span>
+              )}
+            </Button>
             <ThemeToggle />
             <div className="flex items-center gap-2 text-sm">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
@@ -86,7 +110,7 @@ const Dashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Welcome section */}
         <div className="mb-8 animate-slide-up">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+          <h1 className="text-3xl font-serif text-foreground mb-2">
             Welcome back, {userProfile?.username || 'User'}
           </h1>
           <p className="text-muted-foreground">
@@ -105,10 +129,16 @@ const Dashboard: React.FC = () => {
               className="pl-10"
             />
           </div>
-          <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Project
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setNewChatOpen(true)} className="gap-2">
+              <MessageCircle className="h-4 w-4" />
+              New Chat
+            </Button>
+            <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Project
+            </Button>
+          </div>
         </div>
 
         {/* Projects grid */}
@@ -117,7 +147,7 @@ const Dashboard: React.FC = () => {
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
               <FolderOpen className="h-10 w-10 text-primary" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground mb-2">
+            <h2 className="text-xl font-serif text-foreground mb-2">
               {searchQuery ? 'No projects found' : 'No projects yet'}
             </h2>
             <p className="text-muted-foreground text-center mb-6 max-w-md">
@@ -151,7 +181,32 @@ const Dashboard: React.FC = () => {
         )}
       </main>
 
+      {/* Chat Slide Panel */}
+      <div
+        className={cn(
+          'fixed inset-y-0 right-0 w-full sm:w-96 z-50 transform transition-transform duration-300 ease-out',
+          chatOpen ? 'translate-x-0' : 'translate-x-full'
+        )}
+      >
+        <div className="h-full bg-background/80 backdrop-blur-xl shadow-2xl">
+          <ChatPanel onClose={() => setChatOpen(false)} />
+        </div>
+      </div>
+
+      {/* Backdrop */}
+      {chatOpen && (
+        <div 
+          className="fixed inset-0 bg-background/50 backdrop-blur-sm z-40"
+          onClick={() => setChatOpen(false)}
+        />
+      )}
+
       <CreateProjectModal open={createModalOpen} onOpenChange={setCreateModalOpen} />
+      <NewChatModal 
+        open={newChatOpen} 
+        onOpenChange={setNewChatOpen} 
+        onChatCreated={() => setChatOpen(true)}
+      />
     </div>
   );
 };
