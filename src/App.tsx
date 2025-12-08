@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
+import { ChatProvider } from "@/components/chat";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -38,19 +39,21 @@ const App = () => {
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <ProjectProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner position="top-center" theme="system" />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/editor/:id" element={<Editor />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+        <ChatProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner position="top-center" theme="system" />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/editor/:id" element={<Editor />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </ChatProvider>
       </ProjectProvider>
     </AuthProvider>
   </QueryClientProvider>
