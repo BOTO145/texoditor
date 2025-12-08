@@ -21,7 +21,6 @@ import {
   AlignLeft, 
   Grid3X3, 
   LayoutGrid,
-  Circle,
   Check
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,28 +33,36 @@ const Editor: React.FC = () => {
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Load project when ID changes
   useEffect(() => {
     if (id && projects.length > 0) {
       const project = projects.find(p => p.id === id);
       if (project) {
         setCurrentProject(project);
         setContent(project.content);
+        setHasUnsavedChanges(false);
       }
     }
   }, [id, projects, setCurrentProject]);
 
-  // Sync content when currentProject updates from real-time
+  // Sync content from real-time updates (only if not currently editing)
   useEffect(() => {
-    if (currentProject && currentProject.content !== content && !isSaving) {
-      // Only update if content changed externally (real-time sync)
-      const timeSinceLastSave = lastSaved ? Date.now() - lastSaved.getTime() : Infinity;
-      if (timeSinceLastSave > 3000) {
+    if (currentProject && !hasUnsavedChanges && !isSaving) {
+      if (currentProject.content !== content) {
         setContent(currentProject.content);
       }
     }
   }, [currentProject?.content]);
 
+  // Handle content changes
+  const handleContentChange = (newContent: string) => {
+    setContent(newContent);
+    setHasUnsavedChanges(true);
+  };
+
+  // Loading states
   if (loading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -64,11 +71,13 @@ const Editor: React.FC = () => {
     );
   }
 
+  // Auth check
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!isLoading && !currentProject && projects.length > 0) {
+  // Project not found
+  if (!isLoading && projects.length > 0 && !currentProject) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -79,6 +88,7 @@ const Editor: React.FC = () => {
     );
   }
 
+  // Still loading project
   if (!currentProject) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -89,10 +99,15 @@ const Editor: React.FC = () => {
 
   const handleSave = async () => {
     setIsSaving(true);
-    await updateProject(currentProject.id, { content });
-    setLastSaved(new Date());
+    try {
+      await updateProject(currentProject.id, { content });
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+      toast.success('Project saved');
+    } catch {
+      toast.error('Failed to save');
+    }
     setIsSaving(false);
-    toast.success('Project saved');
   };
 
   const handleSheetTypeChange = (value: SheetType) => {
@@ -103,17 +118,24 @@ const Editor: React.FC = () => {
     updateProject(currentProject.id, { name });
   };
 
-  // Auto-save
+  // Auto-save every 3 seconds if there are unsaved changes
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (currentProject && content !== currentProject.content) {
-        updateProject(currentProject.id, { content });
+    if (!hasUnsavedChanges || isSaving) return;
+
+    const timeout = setTimeout(async () => {
+      setIsSaving(true);
+      try {
+        await updateProject(currentProject.id, { content });
         setLastSaved(new Date());
+        setHasUnsavedChanges(false);
+      } catch {
+        // Silent fail for auto-save
       }
-    }, 2000);
+      setIsSaving(false);
+    }, 3000);
 
     return () => clearTimeout(timeout);
-  }, [content]);
+  }, [content, hasUnsavedChanges, currentProject?.id]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -139,22 +161,19 @@ const Editor: React.FC = () => {
             {/* Save status */}
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {isSaving ? (
-                <>
-                  <Circle className="h-2 w-2 fill-warning text-warning animate-pulse" />
-                  Saving...
-                </>
+                <span className="animate-pulse">Saving...</span>
               ) : lastSaved ? (
                 <>
-                  <Check className="h-3 w-3 text-success" />
+                  <Check className="h-3 w-3 text-green-500" />
                   Saved
                 </>
+              ) : hasUnsavedChanges ? (
+                <span className="text-yellow-500">Unsaved</span>
               ) : null}
             </div>
 
-            {/* Theme Toggle */}
             <ThemeToggle />
 
-            {/* Collaborators */}
             <CollaboratorsList
               projectId={currentProject.id}
               collaborators={currentProject.collaborators}
@@ -162,8 +181,7 @@ const Editor: React.FC = () => {
               ownerUsername={currentProject.ownerUsername}
             />
 
-            {/* Save button */}
-            <Button onClick={handleSave} size="sm" className="gap-2" disabled={isSaving}>
+            <Button onClick={handleSave} size="sm" className="gap-2" disabled={isSaving || !hasUnsavedChanges}>
               <Save className="h-4 w-4" />
               <span className="hidden sm:inline">Save</span>
             </Button>
@@ -205,10 +223,10 @@ const Editor: React.FC = () => {
       </header>
 
       {/* Editor */}
-      <main className="flex-1 p-4 animate-fade-in">
+      <main className="flex-1 p-4">
         <SheetEditor
           content={content}
-          onChange={setContent}
+          onChange={handleContentChange}
           sheetType={currentProject.sheetType}
           projectId={currentProject.id}
         />
