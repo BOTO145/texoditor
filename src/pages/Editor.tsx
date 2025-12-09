@@ -15,13 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import DrawingCanvas from '@/components/DrawingCanvas';
 import { 
   ArrowLeft, 
   Save, 
   AlignLeft, 
   Grid3X3, 
   LayoutGrid,
-  Check
+  Check,
+  Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,6 +36,7 @@ const Editor: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showDrawing, setShowDrawing] = useState(false);
 
   // Load project when ID changes
   useEffect(() => {
@@ -219,8 +222,23 @@ const Editor: React.FC = () => {
           <div className="text-xs text-muted-foreground">
             {content.split('\n').length} lines · {content.length} characters
           </div>
+
+          <div className="ml-auto">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={() => setShowDrawing(true)}
+            >
+              <Pencil className="h-4 w-4" />
+              Draw
+            </Button>
+          </div>
         </div>
       </header>
+
+      {/* Drawing Canvas */}
+      {showDrawing && <DrawingCanvas onClose={() => setShowDrawing(false)} />}
 
       {/* Editor */}
       <main className="flex-1 p-4">
