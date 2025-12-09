@@ -54,10 +54,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!user) return;
 
+    // Simple query without orderBy to avoid composite index requirement
     const chatsQuery = query(
       collection(db, 'chats'),
-      where('participants', 'array-contains', user.uid),
-      orderBy('lastMessageAt', 'desc')
+      where('participants', 'array-contains', user.uid)
     );
 
     const unsubscribe = onSnapshot(chatsQuery, (snapshot) => {
@@ -77,6 +77,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastMessageAt: data.lastMessageAt?.toDate(),
           unreadCount,
         });
+      });
+      
+      // Sort client-side instead
+      chatsList.sort((a, b) => {
+        const dateA = a.lastMessageAt?.getTime() || 0;
+        const dateB = b.lastMessageAt?.getTime() || 0;
+        return dateB - dateA;
       });
       
       setChats(chatsList);

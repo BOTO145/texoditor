@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SheetType } from '@/contexts/ProjectContext';
 import LiveCursors from './LiveCursors';
+import TextFormatToolbar from './TextFormatToolbar';
 import { cn } from '@/lib/utils';
 
 interface SheetEditorProps {
@@ -10,15 +11,125 @@ interface SheetEditorProps {
   projectId: string;
 }
 
+interface TextFormat {
+  fontSize: string;
+  fontFamily: string;
+  textColor: string;
+  highlightColor: string;
+  activeFormats: Set<string>;
+}
+
 const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType, projectId }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [lineCount, setLineCount] = useState(1);
+  const [format, setFormat] = useState<TextFormat>({
+    fontSize: '14',
+    fontFamily: 'mono',
+    textColor: '#000000',
+    highlightColor: 'transparent',
+    activeFormats: new Set(),
+  });
 
   useEffect(() => {
     const lines = content.split('\n').length;
     setLineCount(Math.max(lines, 30));
   }, [content]);
+
+  const handleFormat = useCallback((formatType: string, value?: string) => {
+    setFormat(prev => {
+      const newFormat = { ...prev };
+      
+      switch (formatType) {
+        case 'fontSize':
+          newFormat.fontSize = value || '14';
+          break;
+        case 'fontFamily':
+          newFormat.fontFamily = value || 'mono';
+          break;
+        case 'textColor':
+          newFormat.textColor = value || '#000000';
+          break;
+        case 'highlightColor':
+          newFormat.highlightColor = value || 'transparent';
+          break;
+        case 'bold':
+        case 'italic':
+        case 'underline':
+        case 'strikethrough':
+        case 'doubleUnderline':
+          const newFormats = new Set(prev.activeFormats);
+          if (newFormats.has(formatType)) {
+            newFormats.delete(formatType);
+          } else {
+            newFormats.add(formatType);
+          }
+          newFormat.activeFormats = newFormats;
+          break;
+      }
+      
+      return newFormat;
+    });
+  }, []);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      
+      switch (e.key.toLowerCase()) {
+        case 'b':
+          e.preventDefault();
+          handleFormat('bold');
+          break;
+        case 'i':
+          e.preventDefault();
+          handleFormat('italic');
+          break;
+        case 'u':
+          e.preventDefault();
+          handleFormat('underline');
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleFormat]);
+
+  const getTextStyles = () => {
+    const styles: React.CSSProperties = {
+      fontSize: `${format.fontSize}px`,
+      color: format.textColor,
+      backgroundColor: format.highlightColor,
+    };
+
+    if (format.activeFormats.has('bold')) styles.fontWeight = 'bold';
+    if (format.activeFormats.has('italic')) styles.fontStyle = 'italic';
+    if (format.activeFormats.has('underline')) {
+      styles.textDecoration = 'underline';
+    }
+    if (format.activeFormats.has('strikethrough')) {
+      styles.textDecoration = styles.textDecoration 
+        ? `${styles.textDecoration} line-through` 
+        : 'line-through';
+    }
+    if (format.activeFormats.has('doubleUnderline')) {
+      styles.textDecorationLine = 'underline';
+      styles.textDecorationStyle = 'double';
+    }
+
+    return styles;
+  };
+
+  const getFontClass = () => {
+    switch (format.fontFamily) {
+      case 'serif': return 'font-serif';
+      case 'sans': return 'font-sans';
+      case 'literata': return 'font-body';
+      default: return 'font-mono';
+    }
+  };
 
   const getSheetClass = () => {
     switch (sheetType) {
@@ -34,12 +145,24 @@ const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType,
   };
 
   return (
-    <div className="h-full">
+    <div className="h-full flex flex-col gap-3">
+      {/* Format Toolbar */}
+      <div className="bg-card rounded-lg border border-border p-2">
+        <TextFormatToolbar
+          onFormat={handleFormat}
+          activeFormats={format.activeFormats}
+          fontSize={format.fontSize}
+          fontFamily={format.fontFamily}
+          textColor={format.textColor}
+          highlightColor={format.highlightColor}
+        />
+      </div>
+
       {/* Editor Container */}
       <div 
         ref={containerRef}
         className={cn(
-          "h-full rounded-xl overflow-hidden border border-border relative",
+          "flex-1 rounded-xl overflow-hidden border border-border relative",
           getSheetClass()
         )}
       >
@@ -52,7 +175,8 @@ const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType,
             {Array.from({ length: lineCount }, (_, i) => (
               <div
                 key={i}
-                className="text-xs text-muted-foreground text-right pr-3 font-mono h-6 leading-6"
+                className="text-xs text-muted-foreground text-right pr-3 font-mono leading-6"
+                style={{ height: `${parseInt(format.fontSize) + 10}px` }}
               >
                 {i + 1}
               </div>
@@ -67,7 +191,8 @@ const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType,
                 {Array.from({ length: lineCount }, (_, i) => (
                   <div 
                     key={i} 
-                    className="border-b border-border/30 h-6" 
+                    className="border-b border-border/30" 
+                    style={{ height: `${parseInt(format.fontSize) + 10}px` }}
                   />
                 ))}
               </div>
@@ -77,7 +202,14 @@ const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType,
               ref={textareaRef}
               value={content}
               onChange={(e) => onChange(e.target.value)}
-              className="w-full h-full min-h-full resize-none bg-transparent p-4 font-mono text-foreground placeholder:text-muted-foreground focus:outline-none text-sm leading-6"
+              className={cn(
+                "w-full h-full min-h-full resize-none bg-transparent p-4 placeholder:text-muted-foreground focus:outline-none",
+                getFontClass()
+              )}
+              style={{
+                ...getTextStyles(),
+                lineHeight: `${parseInt(format.fontSize) + 10}px`,
+              }}
               placeholder="Start typing your content here..."
               spellCheck={false}
             />
