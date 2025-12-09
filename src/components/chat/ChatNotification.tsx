@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useChat } from './ChatContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { X, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,34 +16,40 @@ interface ChatNotificationProps {
 }
 
 const ChatNotification: React.FC<ChatNotificationProps> = ({ onOpenChat }) => {
-  const { messages, activeChat } = useChat();
+  const { latestMessageFromOther, clearLatestMessage, activeChat } = useChat();
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
-    if (!activeChat || messages.length === 0) return;
-
-    const latestMessage = messages[messages.length - 1];
+    // Only show notification if there's a new message from someone else
+    // and chat panel is not active (or we're not viewing that chat)
+    if (!latestMessageFromOther || !user) return;
     
-    // Only show notification for new messages from others
-    if (latestMessage && !latestMessage.read) {
-      const newNotification: Notification = {
-        id: latestMessage.id,
-        senderName: latestMessage.senderName,
-        message: latestMessage.type === 'gif' ? '🖼️ Sent a GIF' : latestMessage.content,
-        timestamp: latestMessage.createdAt,
-      };
+    // Don't show notification for own messages
+    if (latestMessageFromOther.senderId === user.uid) return;
 
-      setNotifications(prev => {
-        if (prev.some(n => n.id === newNotification.id)) return prev;
-        return [...prev, newNotification];
-      });
+    const newNotification: Notification = {
+      id: latestMessageFromOther.id,
+      senderName: latestMessageFromOther.senderName,
+      message: latestMessageFromOther.type === 'gif' ? '🖼️ Sent a GIF' : latestMessageFromOther.content,
+      timestamp: latestMessageFromOther.createdAt,
+    };
 
-      // Auto-dismiss after 5 seconds
-      setTimeout(() => {
-        setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
-      }, 5000);
-    }
-  }, [messages, activeChat]);
+    setNotifications(prev => {
+      if (prev.some(n => n.id === newNotification.id)) return prev;
+      return [...prev, newNotification];
+    });
+
+    // Auto-dismiss after 5 seconds
+    const timeout = setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+    }, 5000);
+
+    // Clear the latest message from context
+    clearLatestMessage();
+
+    return () => clearTimeout(timeout);
+  }, [latestMessageFromOther, user, clearLatestMessage]);
 
   const dismissNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));

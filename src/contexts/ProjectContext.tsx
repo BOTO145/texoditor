@@ -20,12 +20,28 @@ import { toast } from 'sonner';
 
 export type SheetType = 'single-lined' | 'crosslined' | 'custom-cells';
 
+export interface TextFormat {
+  fontSize: string;
+  fontFamily: string;
+  textColor: string;
+  highlightColor: string;
+  activeFormats: string[];
+}
+
+export interface DrawingData {
+  dataUrl: string;
+  updatedAt: Date;
+  updatedBy: string;
+}
+
 export interface Project {
   id: string;
   name: string;
   description: string;
   sheetType: SheetType;
   content: string;
+  textFormat?: TextFormat;
+  drawing?: DrawingData;
   createdAt: Date;
   updatedAt: Date;
   ownerId: string;
@@ -92,6 +108,12 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
           description: data.description,
           sheetType: data.sheetType,
           content: data.content,
+          textFormat: data.textFormat,
+          drawing: data.drawing ? {
+            dataUrl: data.drawing.dataUrl,
+            updatedAt: data.drawing.updatedAt?.toDate() || new Date(),
+            updatedBy: data.drawing.updatedBy,
+          } : undefined,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           ownerId: data.ownerId,

@@ -10,7 +10,9 @@ import {
   Image as ImageIcon, 
   X, 
   ArrowLeft,
-  Check
+  Check,
+  Trash2,
+  Circle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import EmojiPicker from './EmojiPicker';
@@ -21,8 +23,8 @@ interface ChatPanelProps {
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ onClose }) => {
-  const { chats, activeChat, messages, setActiveChat, sendMessage, markAsRead } = useChat();
-  const { user, userProfile } = useAuth();
+  const { chats, activeChat, messages, setActiveChat, sendMessage, markAsRead, deleteChat, onlineUsers } = useChat();
+  const { user } = useAuth();
   const [message, setMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
@@ -66,6 +68,23 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onClose }) => {
     return otherIds.map(id => chat.participantNames[id] || 'Unknown').join(', ');
   };
 
+  const getOtherParticipantIds = (chat: typeof chats[0]) => {
+    if (!user) return [];
+    return chat.participants.filter(p => p !== user.uid);
+  };
+
+  const isAnyParticipantOnline = (chat: typeof chats[0]) => {
+    const otherIds = getOtherParticipantIds(chat);
+    return otherIds.some(id => onlineUsers.has(id));
+  };
+
+  const handleDeleteChat = async (e: React.MouseEvent, chatId: string) => {
+    e.stopPropagation();
+    if (confirm('Are you sure you want to delete this chat?')) {
+      await deleteChat(chatId);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-card rounded-lg border border-border overflow-hidden">
       {/* Header */}
@@ -75,9 +94,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onClose }) => {
             <Button variant="ghost" size="icon" onClick={() => setActiveChat(null)}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <span className="font-medium text-foreground">
-              {getOtherParticipantName(activeChat)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-foreground">
+                {getOtherParticipantName(activeChat)}
+              </span>
+              {isAnyParticipantOnline(activeChat) ? (
+                <Circle className="h-2 w-2 fill-green-500 text-green-500" />
+              ) : (
+                <Circle className="h-2 w-2 fill-muted-foreground/50 text-muted-foreground/50" />
+              )}
+            </div>
           </>
         ) : (
           <span className="font-serif text-lg text-foreground">Messages</span>
@@ -194,29 +220,57 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onClose }) => {
           ) : (
             <div className="divide-y divide-border">
               {chats.map((chat) => (
-                <button
+                <div
                   key={chat.id}
-                  onClick={() => setActiveChat(chat)}
-                  className="w-full p-4 hover:bg-muted/50 transition-colors text-left"
+                  className="relative group"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground truncate">
-                        {getOtherParticipantName(chat)}
-                      </p>
-                      {chat.lastMessage && (
-                        <p className="text-sm text-muted-foreground truncate mt-0.5">
-                          {chat.lastMessage}
-                        </p>
-                      )}
+                  <button
+                    onClick={() => setActiveChat(chat)}
+                    className="w-full p-4 hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {/* Online indicator */}
+                        <div className="relative flex-shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                            <span className="text-sm font-medium text-primary">
+                              {getOtherParticipantName(chat).charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          {isAnyParticipantOnline(chat) && (
+                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">
+                            {getOtherParticipantName(chat)}
+                          </p>
+                          {chat.lastMessage && (
+                            <p className="text-sm text-muted-foreground truncate mt-0.5">
+                              {chat.lastMessage}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {chat.unreadCount > 0 && (
+                          <span className="bg-primary text-primary-foreground text-xs font-medium px-2 py-0.5 rounded-full">
+                            {chat.unreadCount}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {chat.unreadCount > 0 && (
-                      <span className="ml-2 bg-primary text-primary-foreground text-xs font-medium px-2 py-0.5 rounded-full">
-                        {chat.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                </button>
+                  </button>
+                  {/* Delete button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => handleDeleteChat(e, chat.id)}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
               ))}
             </div>
           )}

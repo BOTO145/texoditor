@@ -11,13 +11,14 @@ import {
   Eraser, 
   Trash2, 
   Download,
-  Palette,
   Minus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DrawingCanvasProps {
   onClose: () => void;
+  initialData?: string;
+  onSave?: (dataUrl: string) => void;
 }
 
 const COLORS = [
@@ -26,13 +27,14 @@ const COLORS = [
   '#ec4899', '#ffffff',
 ];
 
-const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose }) => {
+const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose, initialData, onSave }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(3);
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
+  const hasChanges = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -51,7 +53,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose }) => {
     // Fill with white background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, []);
+
+    // Load initial data if available
+    if (initialData) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = initialData;
+    }
+  }, [initialData]);
 
   const getCanvasPoint = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
@@ -103,12 +114,20 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose }) => {
     ctx.stroke();
 
     lastPoint.current = point;
+    hasChanges.current = true;
   }, [isDrawing, color, brushSize, tool, getCanvasPoint]);
 
   const stopDrawing = useCallback(() => {
+    if (isDrawing && hasChanges.current) {
+      // Auto-save when stopping drawing
+      const canvas = canvasRef.current;
+      if (canvas && onSave) {
+        onSave(canvas.toDataURL('image/png'));
+      }
+    }
     setIsDrawing(false);
     lastPoint.current = null;
-  }, []);
+  }, [isDrawing, onSave]);
 
   const clearCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -117,7 +136,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose }) => {
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, []);
+    hasChanges.current = true;
+    
+    if (onSave) {
+      onSave(canvas.toDataURL('image/png'));
+    }
+  }, [onSave]);
 
   const downloadCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -128,6 +152,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose }) => {
     link.href = canvas.toDataURL('image/png');
     link.click();
   }, []);
+
+  const handleClose = () => {
+    // Save before closing
+    const canvas = canvasRef.current;
+    if (canvas && onSave && hasChanges.current) {
+      onSave(canvas.toDataURL('image/png'));
+    }
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
@@ -215,7 +248,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose }) => {
           </Button>
 
           {/* Close */}
-          <Button variant="outline" size="sm" onClick={onClose}>
+          <Button variant="outline" size="sm" onClick={handleClose}>
             Done
           </Button>
         </div>
