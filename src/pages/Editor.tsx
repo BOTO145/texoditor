@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useProjects, SheetType } from '@/contexts/ProjectContext';
+import { useProjects, SheetType, TextFormat } from '@/contexts/ProjectContext';
 import Logo from '@/components/Logo';
 import SheetEditor from '@/components/SheetEditor';
 import CollaboratorsList from '@/components/CollaboratorsList';
@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 const Editor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, userProfile } = useAuth();
   const { projects, currentProject, setCurrentProject, updateProject, isLoading } = useProjects();
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -64,6 +64,24 @@ const Editor: React.FC = () => {
     setContent(newContent);
     setHasUnsavedChanges(true);
   };
+
+  // Handle format changes - save to project
+  const handleFormatChange = useCallback((format: TextFormat) => {
+    if (!currentProject) return;
+    updateProject(currentProject.id, { textFormat: format });
+  }, [currentProject, updateProject]);
+
+  // Handle drawing save
+  const handleDrawingSave = useCallback((dataUrl: string) => {
+    if (!currentProject || !userProfile) return;
+    updateProject(currentProject.id, {
+      drawing: {
+        dataUrl,
+        updatedAt: new Date(),
+        updatedBy: userProfile.username,
+      }
+    });
+  }, [currentProject, updateProject, userProfile]);
 
   // Loading states
   if (loading || isLoading) {
@@ -238,7 +256,13 @@ const Editor: React.FC = () => {
       </header>
 
       {/* Drawing Canvas */}
-      {showDrawing && <DrawingCanvas onClose={() => setShowDrawing(false)} />}
+      {showDrawing && (
+        <DrawingCanvas 
+          onClose={() => setShowDrawing(false)} 
+          initialData={currentProject.drawing?.dataUrl}
+          onSave={handleDrawingSave}
+        />
+      )}
 
       {/* Editor */}
       <main className="flex-1 p-4">
@@ -247,6 +271,8 @@ const Editor: React.FC = () => {
           onChange={handleContentChange}
           sheetType={currentProject.sheetType}
           projectId={currentProject.id}
+          textFormat={currentProject.textFormat}
+          onFormatChange={handleFormatChange}
         />
       </main>
     </div>

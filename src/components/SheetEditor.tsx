@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { SheetType } from '@/contexts/ProjectContext';
+import { SheetType, TextFormat } from '@/contexts/ProjectContext';
 import LiveCursors from './LiveCursors';
 import TextFormatToolbar from './TextFormatToolbar';
 import { cn } from '@/lib/utils';
@@ -9,27 +9,35 @@ interface SheetEditorProps {
   onChange: (content: string) => void;
   sheetType: SheetType;
   projectId: string;
+  textFormat?: TextFormat;
+  onFormatChange?: (format: TextFormat) => void;
 }
 
-interface TextFormat {
-  fontSize: string;
-  fontFamily: string;
-  textColor: string;
-  highlightColor: string;
-  activeFormats: Set<string>;
-}
-
-const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType, projectId }) => {
+const SheetEditor: React.FC<SheetEditorProps> = ({ 
+  content, 
+  onChange, 
+  sheetType, 
+  projectId,
+  textFormat: savedFormat,
+  onFormatChange,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [lineCount, setLineCount] = useState(1);
-  const [format, setFormat] = useState<TextFormat>({
+  const [format, setFormat] = useState<TextFormat>(() => savedFormat || {
     fontSize: '14',
     fontFamily: 'mono',
-    textColor: '#000000',
+    textColor: 'hsl(var(--foreground))',
     highlightColor: 'transparent',
-    activeFormats: new Set(),
+    activeFormats: [],
   });
+
+  // Sync with saved format on load
+  useEffect(() => {
+    if (savedFormat) {
+      setFormat(savedFormat);
+    }
+  }, [savedFormat]);
 
   useEffect(() => {
     const lines = content.split('\n').length;
@@ -48,7 +56,7 @@ const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType,
           newFormat.fontFamily = value || 'mono';
           break;
         case 'textColor':
-          newFormat.textColor = value || '#000000';
+          newFormat.textColor = value || 'hsl(var(--foreground))';
           break;
         case 'highlightColor':
           newFormat.highlightColor = value || 'transparent';
@@ -58,19 +66,23 @@ const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType,
         case 'underline':
         case 'strikethrough':
         case 'doubleUnderline':
-          const newFormats = new Set(prev.activeFormats);
-          if (newFormats.has(formatType)) {
-            newFormats.delete(formatType);
+          const activeFormats = [...prev.activeFormats];
+          const idx = activeFormats.indexOf(formatType);
+          if (idx > -1) {
+            activeFormats.splice(idx, 1);
           } else {
-            newFormats.add(formatType);
+            activeFormats.push(formatType);
           }
-          newFormat.activeFormats = newFormats;
+          newFormat.activeFormats = activeFormats;
           break;
       }
       
+      // Save format to project
+      onFormatChange?.(newFormat);
+      
       return newFormat;
     });
-  }, []);
+  }, [onFormatChange]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -104,17 +116,17 @@ const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType,
       backgroundColor: format.highlightColor,
     };
 
-    if (format.activeFormats.has('bold')) styles.fontWeight = 'bold';
-    if (format.activeFormats.has('italic')) styles.fontStyle = 'italic';
-    if (format.activeFormats.has('underline')) {
+    if (format.activeFormats.includes('bold')) styles.fontWeight = 'bold';
+    if (format.activeFormats.includes('italic')) styles.fontStyle = 'italic';
+    if (format.activeFormats.includes('underline')) {
       styles.textDecoration = 'underline';
     }
-    if (format.activeFormats.has('strikethrough')) {
+    if (format.activeFormats.includes('strikethrough')) {
       styles.textDecoration = styles.textDecoration 
         ? `${styles.textDecoration} line-through` 
         : 'line-through';
     }
-    if (format.activeFormats.has('doubleUnderline')) {
+    if (format.activeFormats.includes('doubleUnderline')) {
       styles.textDecorationLine = 'underline';
       styles.textDecorationStyle = 'double';
     }
@@ -144,13 +156,15 @@ const SheetEditor: React.FC<SheetEditorProps> = ({ content, onChange, sheetType,
     }
   };
 
+  const activeFormatsSet = new Set(format.activeFormats);
+
   return (
     <div className="h-full flex flex-col gap-3">
       {/* Format Toolbar */}
       <div className="bg-card rounded-lg border border-border p-2">
         <TextFormatToolbar
           onFormat={handleFormat}
-          activeFormats={format.activeFormats}
+          activeFormats={activeFormatsSet}
           fontSize={format.fontSize}
           fontFamily={format.fontFamily}
           textColor={format.textColor}

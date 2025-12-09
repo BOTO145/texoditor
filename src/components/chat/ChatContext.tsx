@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDocs } from 'firebase/firestore';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -19,6 +19,7 @@ interface Chat {
   participantNames: Record<string, string>;
   lastMessage?: string;
   lastMessageAt?: Date;
+  lastSenderId?: string;
   unreadCount: number;
 }
 
@@ -27,10 +28,14 @@ interface ChatContextType {
   activeChat: Chat | null;
   messages: Message[];
   unreadTotal: number;
+  onlineUsers: Set<string>;
+  latestMessageFromOther: Message | null;
   setActiveChat: (chat: Chat | null) => void;
   sendMessage: (content: string, type: 'text' | 'emoji' | 'gif') => Promise<void>;
   createChat: (participantIds: string[], participantNames: Record<string, string>) => Promise<string>;
   markAsRead: (chatId: string) => Promise<void>;
+  deleteChat: (chatId: string) => Promise<void>;
+  clearLatestMessage: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -49,12 +54,69 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [unreadTotal, setUnreadTotal] = useState(0);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [latestMessageFromOther, setLatestMessageFromOther] = useState<Message | null>(null);
+  const prevMessagesLength = useRef(0);
+
+  // Track user presence
+  useEffect(() => {
+    if (!user) return;
+
+    const updatePresence = async () => {
+      try {
+        const presenceRef = doc(db, 'presence', user.uid);
+        await updateDoc(presenceRef, {
+          online: true,
+          lastSeen: serverTimestamp(),
+        }).catch(() => {
+          // Create if doesn't exist
+          addDoc(collection(db, 'presence'), {
+            odoc: user.uid,
+            online: true,
+            lastSeen: serverTimestamp(),
+          });
+        });
+      } catch (e) {
+        console.error('Error updating presence:', e);
+      }
+    };
+
+    updatePresence();
+
+    // Set offline on unload
+    const handleUnload = () => {
+      const presenceRef = doc(db, 'presence', user.uid);
+      updateDoc(presenceRef, { online: false, lastSeen: serverTimestamp() });
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [user]);
+
+  // Listen to online users
+  useEffect(() => {
+    const presenceQuery = query(
+      collection(db, 'presence'),
+      where('online', '==', true)
+    );
+
+    const unsubscribe = onSnapshot(presenceQuery, (snapshot) => {
+      const online = new Set<string>();
+      snapshot.forEach((doc) => {
+        online.add(doc.id);
+      });
+      setOnlineUsers(online);
+    }, (error) => {
+      console.error('Error fetching presence:', error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Listen to user's chats
   useEffect(() => {
     if (!user) return;
 
-    // Simple query without orderBy to avoid composite index requirement
     const chatsQuery = query(
       collection(db, 'chats'),
       where('participants', 'array-contains', user.uid)
@@ -75,11 +137,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           participantNames: data.participantNames || {},
           lastMessage: data.lastMessage,
           lastMessageAt: data.lastMessageAt?.toDate(),
+          lastSenderId: data.lastSenderId,
           unreadCount,
         });
       });
       
-      // Sort client-side instead
+      // Sort client-side
       chatsList.sort((a, b) => {
         const dateA = a.lastMessageAt?.getTime() || 0;
         const dateB = b.lastMessageAt?.getTime() || 0;
@@ -99,6 +162,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!activeChat) {
       setMessages([]);
+      prevMessagesLength.current = 0;
       return;
     }
 
@@ -121,13 +185,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           read: data.read || false,
         });
       });
+      
+      // Check for new messages from others
+      if (messagesList.length > prevMessagesLength.current && user) {
+        const latestMsg = messagesList[messagesList.length - 1];
+        if (latestMsg && latestMsg.senderId !== user.uid) {
+          setLatestMessageFromOther(latestMsg);
+        }
+      }
+      prevMessagesLength.current = messagesList.length;
+      
       setMessages(messagesList);
     }, (error) => {
       console.error('Error fetching messages:', error);
     });
 
     return () => unsubscribe();
-  }, [activeChat]);
+  }, [activeChat, user]);
+
+  const clearLatestMessage = useCallback(() => {
+    setLatestMessageFromOther(null);
+  }, []);
 
   const sendMessage = useCallback(async (content: string, type: 'text' | 'emoji' | 'gif') => {
     if (!activeChat || !user || !userProfile) return;
@@ -142,23 +220,25 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         read: false,
       });
 
-      // Update chat's last message and unread counts
+      // Update chat's last message and unread counts for others
       const unreadBy: Record<string, number> = {};
       activeChat.participants.forEach(pid => {
         if (pid !== user.uid) {
-          unreadBy[pid] = (activeChat.unreadCount || 0) + 1;
+          const currentUnread = chats.find(c => c.id === activeChat.id)?.unreadCount || 0;
+          unreadBy[pid] = currentUnread + 1;
         }
       });
 
       await updateDoc(doc(db, 'chats', activeChat.id), {
         lastMessage: type === 'gif' ? '🖼️ GIF' : content,
         lastMessageAt: serverTimestamp(),
+        lastSenderId: user.uid,
         unreadBy,
       });
     } catch (error) {
       console.error('Error sending message:', error);
     }
-  }, [activeChat, user, userProfile]);
+  }, [activeChat, user, userProfile, chats]);
 
   const createChat = useCallback(async (participantIds: string[], participantNames: Record<string, string>) => {
     if (!user || !userProfile) throw new Error('Not authenticated');
@@ -204,16 +284,31 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
+  const deleteChat = useCallback(async (chatId: string) => {
+    try {
+      await deleteDoc(doc(db, 'chats', chatId));
+      if (activeChat?.id === chatId) {
+        setActiveChat(null);
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+    }
+  }, [activeChat]);
+
   return (
     <ChatContext.Provider value={{
       chats,
       activeChat,
       messages,
       unreadTotal,
+      onlineUsers,
+      latestMessageFromOther,
       setActiveChat,
       sendMessage,
       createChat,
       markAsRead,
+      deleteChat,
+      clearLatestMessage,
     }}>
       {children}
     </ChatContext.Provider>
