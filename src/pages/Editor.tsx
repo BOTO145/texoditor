@@ -1,14 +1,17 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useProjects, SheetType, TextFormat } from '@/contexts/ProjectContext';
+import { useProjects, SheetType } from '@/contexts/ProjectContext';
 import Logo from '@/components/Logo';
-import SheetEditor from '@/components/SheetEditor';
+import RichTextEditor from '@/components/RichTextEditor';
 import CollaboratorsList from '@/components/CollaboratorsList';
 import ThemeToggle from '@/components/ThemeToggle';
 import DrawingCanvas from '@/components/DrawingCanvas';
+import LiveCursors from '@/components/LiveCursors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -26,6 +29,7 @@ import {
   Check,
   Pencil,
   Type,
+  Hash,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -39,6 +43,8 @@ const Editor: React.FC = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [mode, setMode] = useState<'write' | 'draw'>('write');
+  const [showLineNumbers, setShowLineNumbers] = useState(true);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Load project when ID changes
   useEffect(() => {
@@ -66,12 +72,6 @@ const Editor: React.FC = () => {
     setContent(newContent);
     setHasUnsavedChanges(true);
   };
-
-  // Handle format changes - save to project
-  const handleFormatChange = useCallback((format: TextFormat) => {
-    if (!currentProject) return;
-    updateProject(currentProject.id, { textFormat: format });
-  }, [currentProject, updateProject]);
 
   // Handle drawing save
   const handleDrawingSave = useCallback((dataUrl: string) => {
@@ -142,6 +142,7 @@ const Editor: React.FC = () => {
   };
 
   // Auto-save every 3 seconds if there are unsaved changes
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (!hasUnsavedChanges || isSaving) return;
 
@@ -212,7 +213,7 @@ const Editor: React.FC = () => {
         </div>
 
         {/* Toolbar */}
-        <div className="px-4 py-2 border-t border-border/50 flex items-center gap-4">
+        <div className="px-4 py-2 border-t border-border/50 flex items-center gap-4 flex-wrap">
           {/* Mode Toggle */}
           <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-1">
             <Button
@@ -267,24 +268,38 @@ const Editor: React.FC = () => {
             </SelectContent>
           </Select>
 
+          {/* Line Numbers Toggle */}
+          <div className="flex items-center gap-2">
+            <Switch
+              id="line-numbers"
+              checked={showLineNumbers}
+              onCheckedChange={setShowLineNumbers}
+            />
+            <Label htmlFor="line-numbers" className="text-xs text-muted-foreground flex items-center gap-1">
+              <Hash className="h-3 w-3" />
+              Lines
+            </Label>
+          </div>
+
           <div className="text-xs text-muted-foreground">
-            {content.split('\n').length} lines · {content.length} characters
+            {content.length} characters
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 p-4 flex flex-col">
+      <main className="flex-1 p-4 flex flex-col relative" ref={editorContainerRef}>
+        {/* Live Cursors */}
+        <LiveCursors projectId={currentProject.id} containerRef={editorContainerRef} />
+
         {mode === 'write' ? (
-          <SheetEditor
+          <RichTextEditor
             content={content}
             onChange={handleContentChange}
             sheetType={currentProject.sheetType}
-            projectId={currentProject.id}
-            textFormat={currentProject.textFormat}
-            onFormatChange={handleFormatChange}
             drawingMode={false}
             drawingDataUrl={currentProject.drawing?.dataUrl}
+            showLineNumbers={showLineNumbers}
           />
         ) : (
           <DrawingCanvas

@@ -24,6 +24,7 @@ interface DrawingCanvasProps {
   initialData?: string;
   onSave?: (dataUrl: string) => void;
   className?: string;
+  containerRef?: React.RefObject<HTMLElement>;
 }
 
 const COLORS = [
@@ -36,15 +37,18 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
   initialData, 
   onSave,
   className,
+  containerRef: externalContainerRef,
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const internalContainerRef = useRef<HTMLDivElement>(null);
+  const containerRef = externalContainerRef || internalContainerRef;
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(3);
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
   const hasChanges = useRef(false);
+  const canvasSize = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
   useImperativeHandle(ref, () => ({
     getDataUrl: () => {
@@ -54,6 +58,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     clear: () => clearCanvas(),
   }));
 
+  // Initialize and resize canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -62,17 +67,30 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size to match container
     const resizeCanvas = () => {
       const rect = container.getBoundingClientRect();
+      
+      // Store the current drawing
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx && canvasSize.current.width > 0) {
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        tempCtx.drawImage(canvas, 0, 0);
+      }
+
+      // Resize canvas
       canvas.width = rect.width;
       canvas.height = rect.height;
+      canvasSize.current = { width: rect.width, height: rect.height };
 
-      // Make background transparent
+      // Clear and restore
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Load initial data if available
-      if (initialData) {
+      
+      // Restore previous drawing or load initial data
+      if (tempCtx && tempCanvas.width > 0) {
+        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+      } else if (initialData) {
         const img = new Image();
         img.onload = () => {
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -82,9 +100,27 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     };
 
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+    
+    const observer = new ResizeObserver(resizeCanvas);
+    observer.observe(container);
 
-    return () => window.removeEventListener('resize', resizeCanvas);
+    return () => observer.disconnect();
+  }, [containerRef, initialData]);
+
+  // Load initial data when it changes
+  useEffect(() => {
+    if (!initialData) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = initialData;
   }, [initialData]);
 
   const getCanvasPoint = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -92,20 +128,19 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     if (!canvas) return null;
 
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
+    
     if ('touches' in e) {
       const touch = e.touches[0];
+      if (!touch) return null;
       return {
-        x: (touch.clientX - rect.left) * scaleX,
-        y: (touch.clientY - rect.top) * scaleY,
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
       };
     }
 
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
     };
   }, []);
 
@@ -150,7 +185,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
 
   const stopDrawing = useCallback(() => {
     if (isDrawing && hasChanges.current) {
-      // Auto-save when stopping drawing
       const canvas = canvasRef.current;
       if (canvas && onSave) {
         onSave(canvas.toDataURL('image/png'));
@@ -187,7 +221,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     <div className={cn("flex flex-col", className)}>
       {/* Toolbar */}
       <div className="flex items-center gap-2 p-2 bg-card rounded-lg border border-border mb-2">
-        {/* Pen Tool */}
         <Button
           variant={tool === 'pen' ? 'default' : 'ghost'}
           size="icon"
@@ -197,7 +230,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
           <Pencil className="h-4 w-4" />
         </Button>
 
-        {/* Eraser Tool */}
         <Button
           variant={tool === 'eraser' ? 'default' : 'ghost'}
           size="icon"
@@ -209,7 +241,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* Color Picker */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" title="Color">
@@ -236,7 +267,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
           </PopoverContent>
         </Popover>
 
-        {/* Brush Size */}
         <div className="flex items-center gap-2 ml-1">
           <Minus className="h-3 w-3 text-muted-foreground" />
           <Slider
@@ -257,12 +287,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
 
         <div className="w-px h-6 bg-border mx-1" />
 
-        {/* Clear */}
         <Button variant="ghost" size="icon" onClick={clearCanvas} title="Clear Canvas">
           <Trash2 className="h-4 w-4" />
         </Button>
 
-        {/* Download */}
         <Button variant="ghost" size="icon" onClick={downloadCanvas} title="Download">
           <Download className="h-4 w-4" />
         </Button>
@@ -270,7 +298,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
 
       {/* Canvas Container */}
       <div 
-        ref={containerRef}
+        ref={internalContainerRef}
         className="flex-1 relative rounded-xl border border-border overflow-hidden bg-transparent"
       >
         <canvas
