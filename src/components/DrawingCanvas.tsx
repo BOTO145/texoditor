@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -15,10 +15,15 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+export interface DrawingCanvasRef {
+  getDataUrl: () => string | null;
+  clear: () => void;
+}
+
 interface DrawingCanvasProps {
-  onClose: () => void;
   initialData?: string;
   onSave?: (dataUrl: string) => void;
+  className?: string;
 }
 
 const COLORS = [
@@ -27,8 +32,13 @@ const COLORS = [
   '#ec4899', '#ffffff',
 ];
 
-const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose, initialData, onSave }) => {
+const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({ 
+  initialData, 
+  onSave,
+  className,
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(3);
@@ -36,32 +46,45 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose, initialData, onS
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
   const hasChanges = useRef(false);
 
+  useImperativeHandle(ref, () => ({
+    getDataUrl: () => {
+      const canvas = canvasRef.current;
+      return canvas ? canvas.toDataURL('image/png') : null;
+    },
+    clear: () => clearCanvas(),
+  }));
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    const container = canvas.parentElement;
-    if (container) {
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-    }
+    // Set canvas size to match container
+    const resizeCanvas = () => {
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
 
-    // Fill with white background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Make background transparent
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Load initial data if available
-    if (initialData) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0);
-      };
-      img.src = initialData;
-    }
+      // Load initial data if available
+      if (initialData) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.src = initialData;
+      }
+    };
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    return () => window.removeEventListener('resize', resizeCanvas);
   }, [initialData]);
 
   const getCanvasPoint = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -107,8 +130,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose, initialData, onS
     ctx.beginPath();
     ctx.moveTo(lastPoint.current.x, lastPoint.current.y);
     ctx.lineTo(point.x, point.y);
-    ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
-    ctx.lineWidth = tool === 'eraser' ? brushSize * 3 : brushSize;
+    
+    if (tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = brushSize * 3;
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = brushSize;
+    }
+    
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
@@ -134,8 +165,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose, initialData, onS
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     hasChanges.current = true;
     
     if (onSave) {
@@ -153,125 +183,112 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onClose, initialData, onS
     link.click();
   }, []);
 
-  const handleClose = () => {
-    // Save before closing
-    const canvas = canvasRef.current;
-    if (canvas && onSave && hasChanges.current) {
-      onSave(canvas.toDataURL('image/png'));
-    }
-    onClose();
-  };
-
   return (
-    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
+    <div className={cn("flex flex-col", className)}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-3 border-b border-border bg-card">
-        <div className="flex items-center gap-2">
-          {/* Pen Tool */}
-          <Button
-            variant={tool === 'pen' ? 'default' : 'ghost'}
-            size="icon"
-            onClick={() => setTool('pen')}
-            title="Pen"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+      <div className="flex items-center gap-2 p-2 bg-card rounded-lg border border-border mb-2">
+        {/* Pen Tool */}
+        <Button
+          variant={tool === 'pen' ? 'default' : 'ghost'}
+          size="icon"
+          onClick={() => setTool('pen')}
+          title="Pen"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
 
-          {/* Eraser Tool */}
-          <Button
-            variant={tool === 'eraser' ? 'default' : 'ghost'}
-            size="icon"
-            onClick={() => setTool('eraser')}
-            title="Eraser"
-          >
-            <Eraser className="h-4 w-4" />
-          </Button>
+        {/* Eraser Tool */}
+        <Button
+          variant={tool === 'eraser' ? 'default' : 'ghost'}
+          size="icon"
+          onClick={() => setTool('eraser')}
+          title="Eraser"
+        >
+          <Eraser className="h-4 w-4" />
+        </Button>
 
-          <div className="w-px h-6 bg-border mx-2" />
+        <div className="w-px h-6 bg-border mx-1" />
 
-          {/* Color Picker */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" title="Color">
-                <div 
-                  className="w-5 h-5 rounded-full border-2 border-border"
-                  style={{ backgroundColor: color }}
-                />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-2">
-              <div className="grid grid-cols-5 gap-1">
-                {COLORS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setColor(c)}
-                    className={cn(
-                      'w-7 h-7 rounded-full border-2 hover:scale-110 transition-transform',
-                      color === c ? 'border-primary' : 'border-border'
-                    )}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Brush Size */}
-          <div className="flex items-center gap-2 ml-2">
-            <Minus className="h-3 w-3 text-muted-foreground" />
-            <Slider
-              value={[brushSize]}
-              onValueChange={(v) => setBrushSize(v[0])}
-              min={1}
-              max={20}
-              step={1}
-              className="w-24"
-            />
-            <div className="w-5 h-5 flex items-center justify-center">
+        {/* Color Picker */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" title="Color">
               <div 
-                className="rounded-full bg-foreground"
-                style={{ width: brushSize, height: brushSize }}
+                className="w-5 h-5 rounded-full border-2 border-border"
+                style={{ backgroundColor: color }}
               />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-2">
+            <div className="grid grid-cols-5 gap-1">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={cn(
+                    'w-7 h-7 rounded-full border-2 hover:scale-110 transition-transform',
+                    color === c ? 'border-primary' : 'border-border'
+                  )}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
             </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Brush Size */}
+        <div className="flex items-center gap-2 ml-1">
+          <Minus className="h-3 w-3 text-muted-foreground" />
+          <Slider
+            value={[brushSize]}
+            onValueChange={(v) => setBrushSize(v[0])}
+            min={1}
+            max={20}
+            step={1}
+            className="w-20"
+          />
+          <div className="w-5 h-5 flex items-center justify-center">
+            <div 
+              className="rounded-full bg-foreground"
+              style={{ width: brushSize, height: brushSize }}
+            />
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Clear */}
-          <Button variant="ghost" size="icon" onClick={clearCanvas} title="Clear Canvas">
-            <Trash2 className="h-4 w-4" />
-          </Button>
+        <div className="w-px h-6 bg-border mx-1" />
 
-          {/* Download */}
-          <Button variant="ghost" size="icon" onClick={downloadCanvas} title="Download">
-            <Download className="h-4 w-4" />
-          </Button>
+        {/* Clear */}
+        <Button variant="ghost" size="icon" onClick={clearCanvas} title="Clear Canvas">
+          <Trash2 className="h-4 w-4" />
+        </Button>
 
-          {/* Close */}
-          <Button variant="outline" size="sm" onClick={handleClose}>
-            Done
-          </Button>
-        </div>
+        {/* Download */}
+        <Button variant="ghost" size="icon" onClick={downloadCanvas} title="Download">
+          <Download className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 p-4 overflow-hidden">
-        <div className="w-full h-full bg-white rounded-xl border border-border shadow-lg overflow-hidden">
-          <canvas
-            ref={canvasRef}
-            className="w-full h-full cursor-crosshair touch-none"
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={stopDrawing}
-            onTouchStart={startDrawing}
-            onTouchMove={draw}
-            onTouchEnd={stopDrawing}
-          />
-        </div>
+      {/* Canvas Container */}
+      <div 
+        ref={containerRef}
+        className="flex-1 relative rounded-xl border border-border overflow-hidden bg-transparent"
+      >
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+        />
       </div>
     </div>
   );
-};
+});
+
+DrawingCanvas.displayName = 'DrawingCanvas';
 
 export default DrawingCanvas;

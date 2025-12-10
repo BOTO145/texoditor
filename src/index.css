@@ -189,6 +189,11 @@
     background-size: 24px 24px, 24px 24px, 48px 48px;
   }
 
+  .sheet-dot-pattern {
+    background-image: radial-gradient(hsl(var(--border) / 0.5) 1.5px, transparent 1.5px);
+    background-size: 20px 20px;
+  }
+
 }
 
 @layer utilities {

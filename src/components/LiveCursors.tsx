@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +36,8 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
   const { userProfile } = useAuth();
   const [cursors, setCursors] = useState<Record<string, CursorPosition>>({});
   const cursorDocRef = useRef<ReturnType<typeof doc> | null>(null);
+  const pendingUpdate = useRef<CursorPosition | null>(null);
+  const updateTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Subscribe to cursor updates
   useEffect(() => {
@@ -50,8 +52,8 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
         const activeCursors: Record<string, CursorPosition> = {};
         
         Object.entries(data).forEach(([key, cursor]) => {
-          // Filter out own cursor and stale cursors (older than 10 seconds)
-          if (cursor && key !== userProfile.uid && now - cursor.lastUpdated < 10000) {
+          // Filter out own cursor and stale cursors (older than 5 seconds)
+          if (cursor && key !== userProfile.uid && now - cursor.lastUpdated < 5000) {
             activeCursors[key] = cursor;
           }
         });
@@ -75,37 +77,50 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
     };
   }, [projectId, userProfile]);
 
-  // Track mouse movement
+  // Batch cursor updates for performance
+  const flushCursorUpdate = useCallback(() => {
+    if (pendingUpdate.current && cursorDocRef.current && userProfile) {
+      setDoc(cursorDocRef.current, {
+        [userProfile.uid]: pendingUpdate.current
+      }, { merge: true }).catch(() => {});
+      pendingUpdate.current = null;
+    }
+  }, [userProfile]);
+
+  // Track mouse movement with optimized throttling
   useEffect(() => {
     if (!containerRef.current || !userProfile || !cursorDocRef.current) return;
 
     const container = containerRef.current;
-    let lastUpdate = 0;
-    const THROTTLE_MS = 50;
+    const THROTTLE_MS = 16; // ~60fps local, batched to Firebase
 
     const handleMouseMove = (e: MouseEvent) => {
       const now = Date.now();
-      if (now - lastUpdate < THROTTLE_MS) return;
-      lastUpdate = now;
-
       const rect = container.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
 
-      if (x >= 0 && x <= 100 && y >= 0 && y <= 100 && cursorDocRef.current) {
-        setDoc(cursorDocRef.current, {
-          [userProfile.uid]: {
-            x,
-            y,
-            username: userProfile.username,
-            color: getCursorColor(userProfile.username),
-            lastUpdated: now
-          }
-        }, { merge: true }).catch(() => {});
+      if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
+        pendingUpdate.current = {
+          x,
+          y,
+          username: userProfile.username,
+          color: getCursorColor(userProfile.username),
+          lastUpdated: now
+        };
+
+        // Clear existing timeout and set a new one
+        if (updateTimeout.current) {
+          clearTimeout(updateTimeout.current);
+        }
+        updateTimeout.current = setTimeout(flushCursorUpdate, THROTTLE_MS);
       }
     };
 
     const handleMouseLeave = () => {
+      if (updateTimeout.current) {
+        clearTimeout(updateTimeout.current);
+      }
       if (cursorDocRef.current && userProfile) {
         setDoc(cursorDocRef.current, {
           [userProfile.uid]: null
@@ -119,8 +134,11 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
     return () => {
       container.removeEventListener('mousemove', handleMouseMove);
       container.removeEventListener('mouseleave', handleMouseLeave);
+      if (updateTimeout.current) {
+        clearTimeout(updateTimeout.current);
+      }
     };
-  }, [containerRef, userProfile]);
+  }, [containerRef, userProfile, flushCursorUpdate]);
 
   return (
     <>
@@ -128,10 +146,11 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
         cursor && (
           <div
             key={id}
-            className="absolute pointer-events-none z-50 transition-all duration-100 ease-out"
+            className="absolute pointer-events-none z-50"
             style={{
               left: `${cursor.x}%`,
               top: `${cursor.y}%`,
+              transition: 'left 0.05s linear, top 0.05s linear',
             }}
           >
             {/* Cursor arrow */}

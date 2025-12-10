@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useProjects, SheetType } from '@/contexts/ProjectContext';
 import { toast } from 'sonner';
-import { AlignLeft, Grid3X3, LayoutGrid, Check, Loader2 } from 'lucide-react';
+import { AlignLeft, Grid3X3, FileText, Circle, Check, Loader2 } from 'lucide-react';
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -31,10 +31,16 @@ const sheetTypes: { type: SheetType; label: string; description: string; icon: R
     icon: <Grid3X3 className="h-5 w-5" />,
   },
   {
-    type: 'custom-cells',
-    label: 'Custom Cells',
-    description: 'Customizable cell grid layout',
-    icon: <LayoutGrid className="h-5 w-5" />,
+    type: 'clear',
+    label: 'Clear Sheet',
+    description: 'Plain sheet without any lines',
+    icon: <FileText className="h-5 w-5" />,
+  },
+  {
+    type: 'dot-pattern',
+    label: 'Dot Pattern',
+    description: 'Dotted grid for flexible layouts',
+    icon: <Circle className="h-5 w-5" />,
   },
 ];
 
