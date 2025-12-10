@@ -6,6 +6,7 @@ import Logo from '@/components/Logo';
 import SheetEditor from '@/components/SheetEditor';
 import CollaboratorsList from '@/components/CollaboratorsList';
 import ThemeToggle from '@/components/ThemeToggle';
+import DrawingCanvas from '@/components/DrawingCanvas';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,15 +16,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import DrawingCanvas from '@/components/DrawingCanvas';
 import { 
   ArrowLeft, 
   Save, 
   AlignLeft, 
   Grid3X3, 
-  LayoutGrid,
+  Circle,
+  FileText,
   Check,
   Pencil,
+  Type,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,7 +38,7 @@ const Editor: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [showDrawing, setShowDrawing] = useState(false);
+  const [mode, setMode] = useState<'write' | 'draw'>('write');
 
   // Load project when ID changes
   useEffect(() => {
@@ -211,8 +213,30 @@ const Editor: React.FC = () => {
 
         {/* Toolbar */}
         <div className="px-4 py-2 border-t border-border/50 flex items-center gap-4">
+          {/* Mode Toggle */}
+          <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-1">
+            <Button
+              variant={mode === 'write' ? 'default' : 'ghost'}
+              size="sm"
+              className="gap-2 h-7"
+              onClick={() => setMode('write')}
+            >
+              <Type className="h-3 w-3" />
+              Write
+            </Button>
+            <Button
+              variant={mode === 'draw' ? 'default' : 'ghost'}
+              size="sm"
+              className="gap-2 h-7"
+              onClick={() => setMode('draw')}
+            >
+              <Pencil className="h-3 w-3" />
+              Draw
+            </Button>
+          </div>
+
           <Select value={currentProject.sheetType} onValueChange={handleSheetTypeChange}>
-            <SelectTrigger className="w-44 h-8 text-xs">
+            <SelectTrigger className="w-40 h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="glass">
@@ -228,10 +252,16 @@ const Editor: React.FC = () => {
                   Cross Lined
                 </div>
               </SelectItem>
-              <SelectItem value="custom-cells">
+              <SelectItem value="clear">
                 <div className="flex items-center gap-2">
-                  <LayoutGrid className="h-3 w-3" />
-                  Custom Cells
+                  <FileText className="h-3 w-3" />
+                  Clear Sheet
+                </div>
+              </SelectItem>
+              <SelectItem value="dot-pattern">
+                <div className="flex items-center gap-2">
+                  <Circle className="h-3 w-3" />
+                  Dot Pattern
                 </div>
               </SelectItem>
             </SelectContent>
@@ -240,40 +270,29 @@ const Editor: React.FC = () => {
           <div className="text-xs text-muted-foreground">
             {content.split('\n').length} lines · {content.length} characters
           </div>
-
-          <div className="ml-auto">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2"
-              onClick={() => setShowDrawing(true)}
-            >
-              <Pencil className="h-4 w-4" />
-              Draw
-            </Button>
-          </div>
         </div>
       </header>
 
-      {/* Drawing Canvas */}
-      {showDrawing && (
-        <DrawingCanvas 
-          onClose={() => setShowDrawing(false)} 
-          initialData={currentProject.drawing?.dataUrl}
-          onSave={handleDrawingSave}
-        />
-      )}
-
-      {/* Editor */}
-      <main className="flex-1 p-4">
-        <SheetEditor
-          content={content}
-          onChange={handleContentChange}
-          sheetType={currentProject.sheetType}
-          projectId={currentProject.id}
-          textFormat={currentProject.textFormat}
-          onFormatChange={handleFormatChange}
-        />
+      {/* Main Content Area */}
+      <main className="flex-1 p-4 flex flex-col">
+        {mode === 'write' ? (
+          <SheetEditor
+            content={content}
+            onChange={handleContentChange}
+            sheetType={currentProject.sheetType}
+            projectId={currentProject.id}
+            textFormat={currentProject.textFormat}
+            onFormatChange={handleFormatChange}
+            drawingMode={false}
+            drawingDataUrl={currentProject.drawing?.dataUrl}
+          />
+        ) : (
+          <DrawingCanvas
+            initialData={currentProject.drawing?.dataUrl}
+            onSave={handleDrawingSave}
+            className="flex-1"
+          />
+        )}
       </main>
     </div>
   );

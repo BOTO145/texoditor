@@ -4,6 +4,12 @@ import LiveCursors from './LiveCursors';
 import TextFormatToolbar from './TextFormatToolbar';
 import { cn } from '@/lib/utils';
 
+interface FormattedSpan {
+  start: number;
+  end: number;
+  format: TextFormat;
+}
+
 interface SheetEditorProps {
   content: string;
   onChange: (content: string) => void;
@@ -11,6 +17,8 @@ interface SheetEditorProps {
   projectId: string;
   textFormat?: TextFormat;
   onFormatChange?: (format: TextFormat) => void;
+  drawingMode?: boolean;
+  drawingDataUrl?: string;
 }
 
 const SheetEditor: React.FC<SheetEditorProps> = ({ 
@@ -20,11 +28,16 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
   projectId,
   textFormat: savedFormat,
   onFormatChange,
+  drawingMode = false,
+  drawingDataUrl,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [lineCount, setLineCount] = useState(1);
-  const [format, setFormat] = useState<TextFormat>(() => savedFormat || {
+  const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+  
+  // Current format for new text or toolbar display
+  const [currentFormat, setCurrentFormat] = useState<TextFormat>(() => savedFormat || {
     fontSize: '14',
     fontFamily: 'mono',
     textColor: 'hsl(var(--foreground))',
@@ -35,7 +48,7 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
   // Sync with saved format on load
   useEffect(() => {
     if (savedFormat) {
-      setFormat(savedFormat);
+      setCurrentFormat(savedFormat);
     }
   }, [savedFormat]);
 
@@ -44,8 +57,23 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
     setLineCount(Math.max(lines, 30));
   }, [content]);
 
+  // Track selection changes
+  const handleSelectionChange = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    
+    if (start !== end) {
+      setSelection({ start, end });
+    } else {
+      setSelection(null);
+    }
+  }, []);
+
   const handleFormat = useCallback((formatType: string, value?: string) => {
-    setFormat(prev => {
+    setCurrentFormat(prev => {
       const newFormat = { ...prev };
       
       switch (formatType) {
@@ -77,7 +105,7 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
           break;
       }
       
-      // Save format to project
+      // Save format to project (this applies as the default format)
       onFormatChange?.(newFormat);
       
       return newFormat;
@@ -111,22 +139,22 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
 
   const getTextStyles = () => {
     const styles: React.CSSProperties = {
-      fontSize: `${format.fontSize}px`,
-      color: format.textColor,
-      backgroundColor: format.highlightColor,
+      fontSize: `${currentFormat.fontSize}px`,
+      color: currentFormat.textColor,
+      backgroundColor: currentFormat.highlightColor,
     };
 
-    if (format.activeFormats.includes('bold')) styles.fontWeight = 'bold';
-    if (format.activeFormats.includes('italic')) styles.fontStyle = 'italic';
-    if (format.activeFormats.includes('underline')) {
+    if (currentFormat.activeFormats.includes('bold')) styles.fontWeight = 'bold';
+    if (currentFormat.activeFormats.includes('italic')) styles.fontStyle = 'italic';
+    if (currentFormat.activeFormats.includes('underline')) {
       styles.textDecoration = 'underline';
     }
-    if (format.activeFormats.includes('strikethrough')) {
+    if (currentFormat.activeFormats.includes('strikethrough')) {
       styles.textDecoration = styles.textDecoration 
         ? `${styles.textDecoration} line-through` 
         : 'line-through';
     }
-    if (format.activeFormats.includes('doubleUnderline')) {
+    if (currentFormat.activeFormats.includes('doubleUnderline')) {
       styles.textDecorationLine = 'underline';
       styles.textDecorationStyle = 'double';
     }
@@ -135,7 +163,7 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
   };
 
   const getFontClass = () => {
-    switch (format.fontFamily) {
+    switch (currentFormat.fontFamily) {
       case 'serif': return 'font-serif';
       case 'sans': return 'font-sans';
       case 'literata': return 'font-body';
@@ -149,14 +177,16 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
         return 'bg-card';
       case 'crosslined':
         return 'sheet-crossline';
-      case 'custom-cells':
-        return 'sheet-grid';
+      case 'clear':
+        return 'bg-card';
+      case 'dot-pattern':
+        return 'sheet-dot-pattern';
       default:
         return 'bg-card';
     }
   };
 
-  const activeFormatsSet = new Set(format.activeFormats);
+  const activeFormatsSet = new Set(currentFormat.activeFormats);
 
   return (
     <div className="h-full flex flex-col gap-3">
@@ -165,10 +195,10 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
         <TextFormatToolbar
           onFormat={handleFormat}
           activeFormats={activeFormatsSet}
-          fontSize={format.fontSize}
-          fontFamily={format.fontFamily}
-          textColor={format.textColor}
-          highlightColor={format.highlightColor}
+          fontSize={currentFormat.fontSize}
+          fontFamily={currentFormat.fontFamily}
+          textColor={currentFormat.textColor}
+          highlightColor={currentFormat.highlightColor}
         />
       </div>
 
@@ -180,22 +210,40 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
           getSheetClass()
         )}
       >
+        {/* Drawing Layer - shown behind text when in write mode */}
+        {drawingDataUrl && (
+          <div 
+            className={cn(
+              "absolute inset-0 pointer-events-none transition-opacity duration-300",
+              drawingMode ? "opacity-100" : "opacity-30"
+            )}
+          >
+            <img 
+              src={drawingDataUrl} 
+              alt="Drawing" 
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+
         {/* Live Cursors */}
         <LiveCursors projectId={projectId} containerRef={containerRef} />
 
         <div className="flex h-full">
-          {/* Line numbers */}
-          <div className="w-12 bg-secondary/30 border-r border-border py-4 select-none flex-shrink-0">
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div
-                key={i}
-                className="text-xs text-muted-foreground text-right pr-3 font-mono leading-6"
-                style={{ height: `${parseInt(format.fontSize) + 10}px` }}
-              >
-                {i + 1}
-              </div>
-            ))}
-          </div>
+          {/* Line numbers - hidden for clear sheet */}
+          {sheetType !== 'clear' && (
+            <div className="w-12 bg-secondary/30 border-r border-border py-4 select-none flex-shrink-0">
+              {Array.from({ length: lineCount }, (_, i) => (
+                <div
+                  key={i}
+                  className="text-xs text-muted-foreground text-right pr-3 font-mono leading-6"
+                  style={{ height: `${parseInt(currentFormat.fontSize) + 10}px` }}
+                >
+                  {i + 1}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Editor area */}
           <div className="flex-1 relative overflow-auto">
@@ -206,7 +254,7 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
                   <div 
                     key={i} 
                     className="border-b border-border/30" 
-                    style={{ height: `${parseInt(format.fontSize) + 10}px` }}
+                    style={{ height: `${parseInt(currentFormat.fontSize) + 10}px` }}
                   />
                 ))}
               </div>
@@ -216,13 +264,18 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
               ref={textareaRef}
               value={content}
               onChange={(e) => onChange(e.target.value)}
+              onSelect={handleSelectionChange}
+              onKeyUp={handleSelectionChange}
+              onClick={handleSelectionChange}
+              disabled={drawingMode}
               className={cn(
                 "w-full h-full min-h-full resize-none bg-transparent p-4 placeholder:text-muted-foreground focus:outline-none",
-                getFontClass()
+                getFontClass(),
+                drawingMode && "pointer-events-none opacity-50"
               )}
               style={{
                 ...getTextStyles(),
-                lineHeight: `${parseInt(format.fontSize) + 10}px`,
+                lineHeight: `${parseInt(currentFormat.fontSize) + 10}px`,
               }}
               placeholder="Start typing your content here..."
               spellCheck={false}

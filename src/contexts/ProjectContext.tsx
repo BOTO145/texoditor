@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { toast } from 'sonner';
 
-export type SheetType = 'single-lined' | 'crosslined' | 'custom-cells';
+export type SheetType = 'single-lined' | 'crosslined' | 'clear' | 'dot-pattern';
 
 export interface TextFormat {
   fontSize: string;
