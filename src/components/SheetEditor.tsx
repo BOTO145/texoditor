@@ -189,7 +189,7 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
   const activeFormatsSet = new Set(currentFormat.activeFormats);
 
   return (
-    <div className="h-full flex flex-col gap-3">
+    <div className="h-full flex flex-col gap-3 font-body">
       {/* Format Toolbar */}
       <div className="bg-card rounded-lg border border-border p-2">
         <TextFormatToolbar
@@ -230,14 +230,17 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
         <LiveCursors projectId={projectId} containerRef={containerRef} />
 
         <div className="flex h-full">
-          {/* Line numbers - hidden for clear sheet */}
-          {sheetType !== 'clear' && (
+          {/* Line numbers - only shown for single-lined sheet */}
+          {sheetType === 'single-lined' && (
             <div className="w-12 bg-secondary/30 border-r border-border py-4 select-none flex-shrink-0">
               {Array.from({ length: lineCount }, (_, i) => (
                 <div
                   key={i}
-                  className="text-xs text-muted-foreground text-right pr-3 font-mono leading-6"
-                  style={{ height: `${parseInt(currentFormat.fontSize) + 10}px` }}
+                  className="text-xs text-muted-foreground text-right pr-3 font-mono"
+                  style={{ 
+                    height: `${parseInt(currentFormat.fontSize) + 10}px`,
+                    lineHeight: `${parseInt(currentFormat.fontSize) + 10}px`
+                  }}
                 >
                   {i + 1}
                 </div>
@@ -249,7 +252,7 @@ const SheetEditor: React.FC<SheetEditorProps> = ({
           <div className="flex-1 relative overflow-auto">
             {/* Lines overlay for single-lined */}
             {sheetType === 'single-lined' && (
-              <div className="absolute inset-0 pointer-events-none py-4">
+              <div className="absolute inset-0 pointer-events-none py-4 pl-0">
                 {Array.from({ length: lineCount }, (_, i) => (
                   <div 
                     key={i} 

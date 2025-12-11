@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,11 +9,6 @@ interface CursorPosition {
   username: string;
   color: string;
   lastUpdated: number;
-}
-
-interface InterpolatedCursor extends CursorPosition {
-  targetX: number;
-  targetY: number;
 }
 
 interface LiveCursorsProps {
@@ -33,102 +28,37 @@ const getCursorColor = (username: string): string => {
   return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
 };
 
-// Smooth interpolation helper
-const lerp = (start: number, end: number, factor: number) => {
-  return start + (end - start) * factor;
-};
-
 const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) => {
   const { userProfile } = useAuth();
-  const [cursors, setCursors] = useState<Record<string, InterpolatedCursor>>({});
+  const [cursors, setCursors] = useState<Record<string, CursorPosition>>({});
   const cursorDocRef = useRef<ReturnType<typeof doc> | null>(null);
-  const animationRef = useRef<number | null>(null);
-  const lastSendTime = useRef<number>(0);
+  const pendingUpdate = useRef<{ x: number; y: number } | null>(null);
+  const sendIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Animation loop for smooth cursor movement
-  useEffect(() => {
-    const animate = () => {
-      setCursors(prev => {
-        const updated = { ...prev };
-        let hasChanges = false;
-        
-        Object.keys(updated).forEach(key => {
-          const cursor = updated[key];
-          if (!cursor) return;
-          
-          const dx = cursor.targetX - cursor.x;
-          const dy = cursor.targetY - cursor.y;
-          
-          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-            hasChanges = true;
-            updated[key] = {
-              ...cursor,
-              x: lerp(cursor.x, cursor.targetX, 0.3),
-              y: lerp(cursor.y, cursor.targetY, 0.3),
-            };
-          }
-        });
-        
-        return hasChanges ? updated : prev;
-      });
-      
-      animationRef.current = requestAnimationFrame(animate);
-    };
-    
-    animationRef.current = requestAnimationFrame(animate);
-    
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, []);
-
-  // Subscribe to cursor updates
+  // Subscribe to cursor updates with immediate rendering
   useEffect(() => {
     if (!projectId || !userProfile) return;
 
     const cursorsDocRef = doc(db, 'cursors', projectId);
+    cursorDocRef.current = cursorsDocRef;
     
     const unsubscribe = onSnapshot(cursorsDocRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data() as Record<string, CursorPosition>;
         const now = Date.now();
         
-        setCursors(prev => {
-          const updated: Record<string, InterpolatedCursor> = {};
-          
-          Object.entries(data).forEach(([key, cursor]) => {
-            if (cursor && key !== userProfile.uid && now - cursor.lastUpdated < 5000) {
-              const existing = prev[key];
-              if (existing) {
-                // Update target position for interpolation
-                updated[key] = {
-                  ...cursor,
-                  x: existing.x,
-                  y: existing.y,
-                  targetX: cursor.x,
-                  targetY: cursor.y,
-                };
-              } else {
-                // New cursor, start at target position
-                updated[key] = {
-                  ...cursor,
-                  targetX: cursor.x,
-                  targetY: cursor.y,
-                };
-              }
-            }
-          });
-          
-          return updated;
+        const filtered: Record<string, CursorPosition> = {};
+        Object.entries(data).forEach(([key, cursor]) => {
+          if (cursor && key !== userProfile.uid && now - cursor.lastUpdated < 5000) {
+            filtered[key] = cursor;
+          }
         });
+        
+        setCursors(filtered);
       }
     }, (error) => {
       console.log('Cursor sync unavailable:', error.message);
     });
-
-    cursorDocRef.current = cursorsDocRef;
 
     return () => {
       unsubscribe();
@@ -140,33 +70,46 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
     };
   }, [projectId, userProfile]);
 
-  // Track mouse movement - send updates every 50ms for low latency
+  // Send batched cursor updates every 30ms for near-zero latency feel
   useEffect(() => {
-    if (!containerRef.current || !userProfile || !cursorDocRef.current) return;
+    if (!userProfile) return;
 
-    const container = containerRef.current;
-    const SEND_INTERVAL = 50; // Send updates every 50ms
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const now = Date.now();
-      if (now - lastSendTime.current < SEND_INTERVAL) return;
-      
-      const rect = container.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-      if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
-        lastSendTime.current = now;
-        
-        setDoc(cursorDocRef.current!, {
+    sendIntervalRef.current = setInterval(() => {
+      if (pendingUpdate.current && cursorDocRef.current) {
+        const { x, y } = pendingUpdate.current;
+        setDoc(cursorDocRef.current, {
           [userProfile.uid]: {
             x,
             y,
             username: userProfile.username,
             color: getCursorColor(userProfile.username),
-            lastUpdated: now
+            lastUpdated: Date.now()
           }
         }, { merge: true }).catch(() => {});
+        pendingUpdate.current = null;
+      }
+    }, 30);
+
+    return () => {
+      if (sendIntervalRef.current) {
+        clearInterval(sendIntervalRef.current);
+      }
+    };
+  }, [userProfile]);
+
+  // Track mouse movement - update pending position immediately
+  useEffect(() => {
+    if (!containerRef.current || !userProfile) return;
+
+    const container = containerRef.current;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+      if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
+        pendingUpdate.current = { x, y };
       }
     };
 
@@ -178,7 +121,7 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
       }
     };
 
-    container.addEventListener('mousemove', handleMouseMove);
+    container.addEventListener('mousemove', handleMouseMove, { passive: true });
     container.addEventListener('mouseleave', handleMouseLeave);
 
     return () => {
@@ -192,7 +135,7 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
       cursor && (
         <div
           key={id}
-          className="absolute pointer-events-none z-50"
+          className="absolute pointer-events-none z-50 will-change-transform"
           style={{
             left: `${cursor.x}%`,
             top: `${cursor.y}%`,
@@ -214,7 +157,7 @@ const LiveCursors: React.FC<LiveCursorsProps> = ({ projectId, containerRef }) =>
             />
           </svg>
           <div
-            className="absolute left-4 top-4 px-2 py-1 rounded text-xs font-medium whitespace-nowrap"
+            className="absolute left-4 top-4 px-2 py-1 rounded text-xs font-medium whitespace-nowrap font-sans"
             style={{
               backgroundColor: cursor.color,
               color: 'white',
