@@ -14,8 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Literata", "Georgia", "serif"],
+        sans: ["Cormorant Garamond", "Georgia", "serif"],
         serif: ["Belleza", "sans-serif"],
+        body: ["Literata", "Georgia", "serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       colors: {
