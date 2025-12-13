@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/contexts/ProjectContext';
 import { useChat, ChatPanel, ChatNotification, NewChatModal } from '@/components/chat';
+import { StartCallModal } from '@/components/call';
 import Logo from '@/components/Logo';
 import ProjectCard from '@/components/ProjectCard';
 import CreateProjectModal from '@/components/CreateProjectModal';
@@ -16,7 +17,7 @@ import {
   FolderOpen,
   Sparkles,
   MessageCircle,
-  X
+  Phone
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ const Dashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [callModalOpen, setCallModalOpen] = useState(false);
   const navigate = useNavigate();
 
   if (loading || isLoading) {
@@ -130,6 +132,10 @@ const Dashboard: React.FC = () => {
             />
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setCallModalOpen(true)} className="gap-2">
+              <Phone className="h-4 w-4" />
+              Call
+            </Button>
             <Button variant="outline" onClick={() => setNewChatOpen(true)} className="gap-2">
               <MessageCircle className="h-4 w-4" />
               New Chat
@@ -207,6 +213,7 @@ const Dashboard: React.FC = () => {
         onOpenChange={setNewChatOpen} 
         onChatCreated={() => setChatOpen(true)}
       />
+      <StartCallModal open={callModalOpen} onOpenChange={setCallModalOpen} />
     </div>
   );
 };
