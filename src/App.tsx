@@ -7,6 +7,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { ChatProvider } from "@/components/chat";
+import { CallProvider } from "@/contexts/CallContext";
+import { IncomingCallModal, ActiveCallOverlay } from "@/components/call";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -40,19 +42,23 @@ const App = () => {
     <AuthProvider>
       <ProjectProvider>
         <ChatProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner position="top-center" theme="system" />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/editor/:id" element={<Editor />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
+          <CallProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner position="top-center" theme="system" />
+              <IncomingCallModal />
+              <ActiveCallOverlay />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/editor/:id" element={<Editor />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </TooltipProvider>
+          </CallProvider>
         </ChatProvider>
       </ProjectProvider>
     </AuthProvider>

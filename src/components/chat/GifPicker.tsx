@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X, Search, Loader2 } from 'lucide-react';
 
-// Using Giphy's public beta key for demo purposes
-const GIPHY_API_KEY = 'dc6zaTOxFJmzC';
+// Tenor API (free, no key required for basic usage with anonymous ID)
+const TENOR_API_KEY = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ'; // Google's public Tenor API key
 
 interface Gif {
   id: string;
@@ -26,21 +26,24 @@ const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
     setLoading(true);
     try {
       const endpoint = query
-        ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=20`
-        : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`;
+        ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${TENOR_API_KEY}&limit=20&media_filter=gif`
+        : `https://tenor.googleapis.com/v2/featured?key=${TENOR_API_KEY}&limit=20&media_filter=gif`;
       
       const response = await fetch(endpoint);
       const data = await response.json();
       
-      setGifs(
-        data.data.map((gif: any) => ({
-          id: gif.id,
-          url: gif.images.fixed_height.url,
-          preview: gif.images.fixed_height_small.url,
-        }))
-      );
+      if (data.results) {
+        setGifs(
+          data.results.map((gif: any) => ({
+            id: gif.id,
+            url: gif.media_formats?.gif?.url || gif.media_formats?.mediumgif?.url,
+            preview: gif.media_formats?.tinygif?.url || gif.media_formats?.nanogif?.url,
+          }))
+        );
+      }
     } catch (error) {
       console.error('Error fetching GIFs:', error);
+      setGifs([]);
     } finally {
       setLoading(false);
     }
@@ -52,15 +55,13 @@ const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
 
   useEffect(() => {
     const debounce = setTimeout(() => {
-      if (search) {
-        fetchGifs(search);
-      }
-    }, 500);
+      fetchGifs(search);
+    }, 300);
     return () => clearTimeout(debounce);
   }, [search]);
 
   return (
-    <div className="bg-card p-3 max-h-72 overflow-hidden flex flex-col animate-slide-in-bottom">
+    <div className="bg-card p-3 max-h-72 overflow-hidden flex flex-col animate-slide-in-bottom rounded-lg border border-border">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-foreground">GIFs</span>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
@@ -83,6 +84,10 @@ const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
+        ) : gifs.length === 0 ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+            No GIFs found
+          </div>
         ) : (
           <div className="grid grid-cols-3 gap-1">
             {gifs.map((gif) => (
@@ -104,7 +109,7 @@ const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
       </div>
       
       <p className="text-[10px] text-muted-foreground text-center mt-2">
-        Powered by GIPHY
+        Powered by Tenor
       </p>
     </div>
   );
