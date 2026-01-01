@@ -93,13 +93,9 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ open, onOpenChange, onChatC
 
     setCreating(true);
     try {
-      const participantIds = selectedUsers.map(u => u.uid);
-      const participantNames: Record<string, string> = {};
-      selectedUsers.forEach(u => {
-        participantNames[u.uid] = u.username;
-      });
-
-      const chatId = await createChat(participantIds, participantNames);
+      // Use only the first selected user (1-on-1 chat)
+      const selectedUser = selectedUsers[0];
+      const chatId = await createChat(selectedUser.uid, selectedUser.username);
       
       // Find the chat and set it as active
       const chat = chats.find(c => c.id === chatId);

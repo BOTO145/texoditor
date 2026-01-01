@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/contexts/ProjectContext';
-import { useChat, ChatPanel, ChatNotification, NewChatModal } from '@/components/chat';
+import { useChat, ChatPanel, ChatNotification } from '@/components/chat';
 import { StartCallModal } from '@/components/call';
+import { useFriends } from '@/contexts/FriendContext';
 import Logo from '@/components/Logo';
 import ProjectCard from '@/components/ProjectCard';
 import CreateProjectModal from '@/components/CreateProjectModal';
@@ -17,7 +18,8 @@ import {
   FolderOpen,
   Sparkles,
   MessageCircle,
-  Phone
+  Phone,
+  Users
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -26,10 +28,10 @@ const Dashboard: React.FC = () => {
   const { user, userProfile, logout, loading } = useAuth();
   const { projects, setCurrentProject, deleteProject, isLoading } = useProjects();
   const { unreadTotal } = useChat();
+  const { incomingRequests } = useFriends();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
-  const [newChatOpen, setNewChatOpen] = useState(false);
   const [callModalOpen, setCallModalOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -136,9 +138,18 @@ const Dashboard: React.FC = () => {
               <Phone className="h-4 w-4" />
               Call
             </Button>
-            <Button variant="outline" onClick={() => setNewChatOpen(true)} className="gap-2">
-              <MessageCircle className="h-4 w-4" />
-              New Chat
+            <Button 
+              variant="outline" 
+              onClick={() => setChatOpen(true)} 
+              className="gap-2 relative"
+            >
+              <Users className="h-4 w-4" />
+              Friends
+              {incomingRequests.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs font-medium rounded-full flex items-center justify-center">
+                  {incomingRequests.length}
+                </span>
+              )}
             </Button>
             <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
               <Plus className="h-4 w-4" />
@@ -208,11 +219,6 @@ const Dashboard: React.FC = () => {
       )}
 
       <CreateProjectModal open={createModalOpen} onOpenChange={setCreateModalOpen} />
-      <NewChatModal 
-        open={newChatOpen} 
-        onOpenChange={setNewChatOpen} 
-        onChatCreated={() => setChatOpen(true)}
-      />
       <StartCallModal open={callModalOpen} onOpenChange={setCallModalOpen} />
     </div>
   );

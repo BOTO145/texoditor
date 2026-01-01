@@ -1,11 +1,34 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Phone, PhoneOff, User } from 'lucide-react';
 import { useCall } from '@/contexts/CallContext';
+import { useRingtone } from '@/hooks/useRingtone';
 
 const IncomingCallModal: React.FC = () => {
   const { incomingCall, acceptCall, rejectCall } = useCall();
+  const { playIncomingRingtone, stopRingtone } = useRingtone();
+
+  // Play ringtone when incoming call is detected
+  useEffect(() => {
+    if (incomingCall) {
+      playIncomingRingtone();
+    } else {
+      stopRingtone();
+    }
+    
+    return () => stopRingtone();
+  }, [incomingCall, playIncomingRingtone, stopRingtone]);
+
+  const handleAccept = () => {
+    stopRingtone();
+    acceptCall();
+  };
+
+  const handleReject = () => {
+    stopRingtone();
+    rejectCall();
+  };
 
   if (!incomingCall) return null;
 
@@ -30,14 +53,14 @@ const IncomingCallModal: React.FC = () => {
               variant="destructive"
               size="lg"
               className="rounded-full w-16 h-16"
-              onClick={rejectCall}
+              onClick={handleReject}
             >
               <PhoneOff className="w-6 h-6" />
             </Button>
             <Button
               size="lg"
               className="rounded-full w-16 h-16 bg-green-500 hover:bg-green-600"
-              onClick={acceptCall}
+              onClick={handleAccept}
             >
               <Phone className="w-6 h-6" />
             </Button>

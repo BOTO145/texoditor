@@ -32,7 +32,7 @@ interface ChatContextType {
   latestMessageFromOther: Message | null;
   setActiveChat: (chat: Chat | null) => void;
   sendMessage: (content: string, type: 'text' | 'emoji' | 'gif') => Promise<void>;
-  createChat: (participantIds: string[], participantNames: Record<string, string>) => Promise<string>;
+  createChat: (participantId: string, participantUsername: string) => Promise<string>;
   markAsRead: (chatId: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
   clearLatestMessage: () => void;
@@ -240,11 +240,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [activeChat, user, userProfile, chats]);
 
-  const createChat = useCallback(async (participantIds: string[], participantNames: Record<string, string>) => {
+  // Modified createChat to work with friend system - takes userId and username directly
+  const createChat = useCallback(async (participantId: string, participantUsername: string) => {
     if (!user || !userProfile) throw new Error('Not authenticated');
 
-    const allParticipants = [...participantIds, user.uid];
-    const allNames = { ...participantNames, [user.uid]: userProfile.username };
+    const allParticipants = [participantId, user.uid];
+    const allNames = { 
+      [participantId]: participantUsername, 
+      [user.uid]: userProfile.username 
+    };
 
     // Check if chat already exists
     const existingQuery = query(
@@ -284,6 +288,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
+  // deleteChat only deletes the chat, not the friendship
   const deleteChat = useCallback(async (chatId: string) => {
     try {
       await deleteDoc(doc(db, 'chats', chatId));
