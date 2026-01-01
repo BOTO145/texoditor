@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Send, 
   Smile, 
@@ -13,21 +14,30 @@ import {
   Check,
   Trash2,
   Circle,
+  Users,
+  MessageCircle,
+  UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import EmojiPicker from './EmojiPicker';
 import GifPicker from './GifPicker';
+import { FriendRequestsPanel, AddFriendModal } from '@/components/friends';
+import { useFriends } from '@/contexts/FriendContext';
+import { toast } from 'sonner';
 
 interface ChatPanelProps {
   onClose: () => void;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ onClose }) => {
-  const { chats, activeChat, messages, setActiveChat, sendMessage, markAsRead, deleteChat, onlineUsers } = useChat();
+  const { chats, activeChat, messages, setActiveChat, sendMessage, markAsRead, deleteChat, onlineUsers, createChat } = useChat();
+  const { friends, incomingRequests } = useFriends();
   const { user } = useAuth();
   const [message, setMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [addFriendOpen, setAddFriendOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('chats');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,8 +90,23 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onClose }) => {
 
   const handleDeleteChat = async (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
-    if (confirm('Are you sure you want to delete this chat?')) {
+    if (confirm('Are you sure you want to delete this chat? Your friendship will remain.')) {
       await deleteChat(chatId);
+    }
+  };
+
+  const handleStartChatWithFriend = async (friendId: string, friendUsername: string) => {
+    try {
+      const chatId = await createChat(friendId, friendUsername);
+      // Find and set the chat
+      const chat = chats.find(c => c.id === chatId);
+      if (chat) {
+        setActiveChat(chat);
+      }
+      setActiveTab('chats');
+      toast.success(`Chat with ${friendUsername} ready!`);
+    } catch (error) {
+      toast.error('Failed to start chat');
     }
   };
 
@@ -210,72 +235,111 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onClose }) => {
           </div>
         </>
       ) : (
-        /* Chat List */
-        <ScrollArea className="flex-1">
-          {chats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-12 text-muted-foreground">
-              <p className="text-sm">No conversations yet</p>
-              <p className="text-xs mt-1">Start a new chat from the dashboard</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {chats.map((chat) => (
-                <div
-                  key={chat.id}
-                  className="relative group"
-                >
-                  <button
-                    onClick={() => setActiveChat(chat)}
-                    className="w-full p-4 hover:bg-muted/50 transition-colors text-left"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {/* Online indicator */}
-                        <div className="relative flex-shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                            <span className="text-sm font-medium text-primary">
-                              {getOtherParticipantName(chat).charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          {isAnyParticipantOnline(chat) && (
-                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate">
-                            {getOtherParticipantName(chat)}
-                          </p>
-                          {chat.lastMessage && (
-                            <p className="text-sm text-muted-foreground truncate mt-0.5">
-                              {chat.lastMessage}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {chat.unreadCount > 0 && (
-                          <span className="bg-primary text-primary-foreground text-xs font-medium px-2 py-0.5 rounded-full">
-                            {chat.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                  {/* Delete button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => handleDeleteChat(e, chat.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+        /* Chat List with Tabs */
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-2 mx-4 mt-2" style={{ width: 'calc(100% - 2rem)' }}>
+            <TabsTrigger value="chats" className="gap-2">
+              <MessageCircle className="h-4 w-4" />
+              Chats
+            </TabsTrigger>
+            <TabsTrigger value="friends" className="gap-2 relative">
+              <Users className="h-4 w-4" />
+              Friends
+              {incomingRequests.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+                  {incomingRequests.length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="chats" className="flex-1 mt-0">
+            <ScrollArea className="h-full">
+              {chats.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full py-12 text-muted-foreground">
+                  <p className="text-sm">No conversations yet</p>
+                  <p className="text-xs mt-1">Add friends to start chatting!</p>
                 </div>
-              ))}
+              ) : (
+                <div className="divide-y divide-border">
+                  {chats.map((chat) => (
+                    <div
+                      key={chat.id}
+                      className="relative group"
+                    >
+                      <button
+                        onClick={() => setActiveChat(chat)}
+                        className="w-full p-4 hover:bg-muted/50 transition-colors text-left"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            {/* Online indicator */}
+                            <div className="relative flex-shrink-0">
+                              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                                <span className="text-sm font-medium text-primary">
+                                  {getOtherParticipantName(chat).charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              {isAnyParticipantOnline(chat) && (
+                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-foreground truncate">
+                                {getOtherParticipantName(chat)}
+                              </p>
+                              {chat.lastMessage && (
+                                <p className="text-sm text-muted-foreground truncate mt-0.5">
+                                  {chat.lastMessage}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {chat.unreadCount > 0 && (
+                              <span className="bg-primary text-primary-foreground text-xs font-medium px-2 py-0.5 rounded-full">
+                                {chat.unreadCount}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                      {/* Delete button */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => handleDeleteChat(e, chat.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="friends" className="flex-1 mt-0 flex flex-col">
+            <div className="p-2 border-b border-border">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full gap-2"
+                onClick={() => setAddFriendOpen(true)}
+              >
+                <UserPlus className="h-4 w-4" />
+                Add Friend
+              </Button>
             </div>
-          )}
-        </ScrollArea>
+            <div className="flex-1">
+              <FriendRequestsPanel onStartChat={handleStartChatWithFriend} />
+            </div>
+          </TabsContent>
+        </Tabs>
       )}
+
+      <AddFriendModal open={addFriendOpen} onOpenChange={setAddFriendOpen} />
     </div>
   );
 };

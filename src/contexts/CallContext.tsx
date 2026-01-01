@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { db } from '@/lib/firebase';
 import { doc, setDoc, onSnapshot, deleteDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface CallState {
   callId: string | null;
@@ -35,8 +36,11 @@ const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
   ],
 };
+
+const CALL_TIMEOUT = 30000; // 30 seconds
 
 export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { userProfile } = useAuth();
@@ -52,6 +56,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Create audio element for remote stream
   useEffect(() => {
@@ -60,6 +65,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       remoteAudioRef.current = null;
     };
+  }, []);
+
+  // Clear timeout helper
+  const clearCallTimeout = useCallback(() => {
+    if (callTimeoutRef.current) {
+      clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = null;
+    }
   }, []);
 
   // Listen for incoming calls
@@ -100,6 +113,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await cleanup();
         setCallState({ callId: null, caller: '', callee: '', status: 'idle', isMuted: false });
         setIncomingCall(null);
+        clearCallTimeout();
         return;
       }
 
@@ -107,19 +121,36 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Handle answer from callee
       if (data.answer && peerConnectionRef.current && !peerConnectionRef.current.currentRemoteDescription) {
-        const answer = new RTCSessionDescription(data.answer);
-        await peerConnectionRef.current.setRemoteDescription(answer);
+        try {
+          const answer = new RTCSessionDescription(data.answer);
+          await peerConnectionRef.current.setRemoteDescription(answer);
+          clearCallTimeout(); // Call was answered
+        } catch (e) {
+          console.error('Error setting remote description:', e);
+        }
       }
 
       // Handle ICE candidates
-      if (data.iceCandidates) {
-        const candidates = data.iceCandidates;
-        for (const candidate of candidates) {
-          if (candidate && peerConnectionRef.current) {
+      if (data.iceCandidates && peerConnectionRef.current) {
+        for (const candidate of data.iceCandidates) {
+          if (candidate) {
             try {
               await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (e) {
-              console.log('Error adding ICE candidate:', e);
+              // Ignore duplicate candidates
+            }
+          }
+        }
+      }
+
+      // Handle answer ICE candidates
+      if (data.answerIceCandidates && peerConnectionRef.current) {
+        for (const candidate of data.answerIceCandidates) {
+          if (candidate) {
+            try {
+              await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+              // Ignore duplicate candidates
             }
           }
         }
@@ -127,17 +158,21 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.status === 'connected') {
         setCallState(prev => ({ ...prev, status: 'connected' }));
+        clearCallTimeout();
       } else if (data.status === 'ended') {
         await cleanup();
         setCallState({ callId: null, caller: '', callee: '', status: 'idle', isMuted: false });
         setIncomingCall(null);
+        clearCallTimeout();
       }
     });
 
     return () => unsubscribe();
-  }, [callState.callId]);
+  }, [callState.callId, clearCallTimeout]);
 
   const cleanup = async () => {
+    clearCallTimeout();
+    
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
@@ -158,6 +193,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Create peer connection
       peerConnectionRef.current = new RTCPeerConnection(ICE_SERVERS);
       
+      // Monitor connection state
+      peerConnectionRef.current.onconnectionstatechange = () => {
+        const state = peerConnectionRef.current?.connectionState;
+        if (state === 'failed' || state === 'disconnected') {
+          toast.error('Call connection lost');
+          endCall();
+        }
+      };
+
       // Add local stream tracks
       localStreamRef.current.getTracks().forEach(track => {
         peerConnectionRef.current!.addTrack(track, localStreamRef.current!);
@@ -178,7 +222,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       peerConnectionRef.current.onicecandidate = async (event) => {
         if (event.candidate) {
           iceCandidates.push(event.candidate.toJSON());
-          await updateDoc(callDocRef, { iceCandidates });
+          try {
+            await updateDoc(callDocRef, { iceCandidates });
+          } catch (e) {
+            // Document may not exist yet
+          }
         }
       };
 
@@ -204,8 +252,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status: 'calling',
         isMuted: false,
       });
-    } catch (error) {
+
+      // Set timeout for unanswered call
+      callTimeoutRef.current = setTimeout(async () => {
+        toast.info(`${username} didn't answer`);
+        await endCall();
+      }, CALL_TIMEOUT);
+
+    } catch (error: any) {
       console.error('Error starting call:', error);
+      if (error.name === 'NotAllowedError') {
+        toast.error('Microphone access denied');
+      } else {
+        toast.error('Failed to start call');
+      }
       await cleanup();
     }
   }, [userProfile]);
@@ -220,6 +280,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Create peer connection
       peerConnectionRef.current = new RTCPeerConnection(ICE_SERVERS);
       
+      // Monitor connection state
+      peerConnectionRef.current.onconnectionstatechange = () => {
+        const state = peerConnectionRef.current?.connectionState;
+        if (state === 'failed' || state === 'disconnected') {
+          toast.error('Call connection lost');
+          endCall();
+        }
+      };
+
       // Add local stream tracks
       localStreamRef.current.getTracks().forEach(track => {
         peerConnectionRef.current!.addTrack(track, localStreamRef.current!);
@@ -235,7 +304,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const callDocRef = doc(db, 'calls', incomingCall.callId);
       const callDoc = await getDocs(query(collection(db, 'calls'), where('__name__', '==', incomingCall.callId)));
       
-      if (callDoc.empty) return;
+      if (callDoc.empty) {
+        toast.error('Call no longer exists');
+        setIncomingCall(null);
+        return;
+      }
       
       const callData = callDoc.docs[0].data();
 
@@ -243,11 +316,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(callData.offer));
 
       // Collect ICE candidates
-      const iceCandidates: RTCIceCandidateInit[] = callData.iceCandidates || [];
+      const answerIceCandidates: RTCIceCandidateInit[] = [];
       peerConnectionRef.current.onicecandidate = async (event) => {
         if (event.candidate) {
-          iceCandidates.push(event.candidate.toJSON());
-          await updateDoc(callDocRef, { answerIceCandidates: iceCandidates });
+          answerIceCandidates.push(event.candidate.toJSON());
+          try {
+            await updateDoc(callDocRef, { answerIceCandidates });
+          } catch (e) {
+            console.error('Error updating answer ICE candidates:', e);
+          }
         }
       };
 
@@ -257,7 +334,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
           } catch (e) {
-            console.log('Error adding ICE candidate:', e);
+            // Ignore
           }
         }
       }
@@ -280,9 +357,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isMuted: false,
       });
       setIncomingCall(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accepting call:', error);
+      if (error.name === 'NotAllowedError') {
+        toast.error('Microphone access denied');
+      } else {
+        toast.error('Failed to accept call');
+      }
       await cleanup();
+      setIncomingCall(null);
     }
   }, [incomingCall, userProfile]);
 
@@ -299,15 +382,22 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [incomingCall]);
 
   const endCall = useCallback(async () => {
-    if (!callState.callId) return;
-
-    try {
-      await deleteDoc(doc(db, 'calls', callState.callId));
-      await cleanup();
-      setCallState({ callId: null, caller: '', callee: '', status: 'idle', isMuted: false });
-      setIncomingCall(null);
-    } catch (error) {
-      console.error('Error ending call:', error);
+    const currentCallId = callState.callId;
+    
+    // Reset state immediately
+    setCallState({ callId: null, caller: '', callee: '', status: 'idle', isMuted: false });
+    setIncomingCall(null);
+    
+    // Then cleanup
+    await cleanup();
+    
+    // Finally delete from Firestore
+    if (currentCallId) {
+      try {
+        await deleteDoc(doc(db, 'calls', currentCallId));
+      } catch (error) {
+        console.error('Error ending call:', error);
+      }
     }
   }, [callState.callId]);
 
