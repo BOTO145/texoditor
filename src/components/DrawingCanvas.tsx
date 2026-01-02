@@ -46,6 +46,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(3);
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
+  const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
   const hasChanges = useRef(false);
   const canvasSize = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
@@ -152,14 +153,18 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     lastPoint.current = point;
   }, [getCanvasPoint]);
 
-  const draw = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const point = getCanvasPoint(e);
+    if (point) {
+      setCursorPosition(point);
+    }
+
     if (!isDrawing) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx || !lastPoint.current) return;
 
-    const point = getCanvasPoint(e);
     if (!point) return;
 
     ctx.beginPath();
@@ -182,6 +187,18 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     lastPoint.current = point;
     hasChanges.current = true;
   }, [isDrawing, color, brushSize, tool, getCanvasPoint]);
+
+  const handleMouseLeave = useCallback(() => {
+    setCursorPosition(null);
+    if (isDrawing && hasChanges.current) {
+      const canvas = canvasRef.current;
+      if (canvas && onSave) {
+        onSave(canvas.toDataURL('image/png'));
+      }
+    }
+    setIsDrawing(false);
+    lastPoint.current = null;
+  }, [isDrawing, onSave]);
 
   const stopDrawing = useCallback(() => {
     if (isDrawing && hasChanges.current) {
@@ -299,19 +316,57 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
       {/* Canvas Container */}
       <div 
         ref={internalContainerRef}
-        className="flex-1 relative rounded-xl border border-border overflow-hidden bg-transparent"
+        className="flex-1 relative rounded-xl border border-border overflow-hidden bg-transparent cursor-none"
       >
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+          className="absolute inset-0 w-full h-full cursor-none touch-none"
           onMouseDown={startDrawing}
-          onMouseMove={draw}
+          onMouseMove={handleMouseMove}
           onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
+          onMouseLeave={handleMouseLeave}
           onTouchStart={startDrawing}
-          onTouchMove={draw}
+          onTouchMove={handleMouseMove}
           onTouchEnd={stopDrawing}
         />
+        
+        {/* Custom Cursor */}
+        {cursorPosition && (
+          <div
+            className="absolute pointer-events-none z-10 -translate-x-1/2 -translate-y-1/2"
+            style={{
+              left: cursorPosition.x,
+              top: cursorPosition.y,
+            }}
+          >
+            {/* Outer ring */}
+            <div
+              className="absolute rounded-full border-2 -translate-x-1/2 -translate-y-1/2"
+              style={{
+                width: tool === 'eraser' ? brushSize * 3 + 4 : brushSize + 8,
+                height: tool === 'eraser' ? brushSize * 3 + 4 : brushSize + 8,
+                borderColor: tool === 'eraser' ? 'hsl(var(--destructive))' : color,
+                opacity: 0.6,
+              }}
+            />
+            {/* Inner dot */}
+            <div
+              className="absolute rounded-full -translate-x-1/2 -translate-y-1/2"
+              style={{
+                width: tool === 'eraser' ? brushSize * 3 : brushSize,
+                height: tool === 'eraser' ? brushSize * 3 : brushSize,
+                backgroundColor: tool === 'eraser' ? 'hsl(var(--destructive) / 0.3)' : color,
+              }}
+            />
+            {/* Crosshair */}
+            <div className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+              <div className="w-4 h-[1px] bg-foreground/50" />
+            </div>
+            <div className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+              <div className="w-[1px] h-4 bg-foreground/50" />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
