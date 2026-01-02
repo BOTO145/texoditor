@@ -2,12 +2,14 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects, SheetType } from '@/contexts/ProjectContext';
+import { useCall } from '@/contexts/CallContext';
 import Logo from '@/components/Logo';
 import RichTextEditor from '@/components/RichTextEditor';
 import CollaboratorsList from '@/components/CollaboratorsList';
 import ThemeToggle from '@/components/ThemeToggle';
 import DrawingCanvas from '@/components/DrawingCanvas';
 import LiveCursors from '@/components/LiveCursors';
+import { CallBar } from '@/components/call';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -38,6 +40,7 @@ const Editor: React.FC = () => {
   const navigate = useNavigate();
   const { user, loading, userProfile } = useAuth();
   const { projects, currentProject, setCurrentProject, updateProject, isLoading } = useProjects();
+  const { callState } = useCall();
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -45,6 +48,8 @@ const Editor: React.FC = () => {
   const [mode, setMode] = useState<'write' | 'draw'>('write');
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  
+  const isInCall = callState.status === 'calling' || callState.status === 'connected';
 
   // Load project when ID changes
   useEffect(() => {
@@ -163,8 +168,15 @@ const Editor: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Call Bar - shown when in a call */}
+      {isInCall && (
+        <div className="sticky top-0 z-[60] px-4 py-2 bg-background border-b border-border">
+          <CallBar />
+        </div>
+      )}
+      
       {/* Header */}
-      <header className="glass border-b border-border sticky top-0 z-50">
+      <header className="glass border-b border-border sticky top-0 z-50" style={{ top: isInCall ? '52px' : 0 }}>
         <div className="px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>

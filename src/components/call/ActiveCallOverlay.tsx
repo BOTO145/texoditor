@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Phone, PhoneOff, Mic, MicOff, Loader2 } from 'lucide-react';
 import { useCall } from '@/contexts/CallContext';
 import { useRingtone } from '@/hooks/useRingtone';
 
 const ActiveCallOverlay: React.FC = () => {
+  const location = useLocation();
   const { callState, endCall, toggleMute } = useCall();
   const { playOutgoingRingtone, stopRingtone } = useRingtone();
   const [duration, setDuration] = useState(0);
+  
+  // Hide overlay when on editor page (CallBar is shown instead)
+  const isOnEditorPage = location.pathname.startsWith('/editor');
 
   // Play outgoing ringtone when calling
   useEffect(() => {
@@ -33,7 +38,9 @@ const ActiveCallOverlay: React.FC = () => {
     return () => clearInterval(interval);
   }, [callState.status]);
 
-  if (callState.status === 'idle' || callState.status === 'incoming') return null;
+
+  // Don't show if idle, incoming, or on editor page
+  if (callState.status === 'idle' || callState.status === 'incoming' || isOnEditorPage) return null;
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

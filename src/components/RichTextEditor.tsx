@@ -310,7 +310,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </div>
         )}
 
-        <div className="flex h-full">
+        <div className="flex h-full min-h-[500px]">
           {/* Line numbers - optional */}
           {showLineNumbers && sheetType !== 'clear' && (
             <div className="w-12 bg-secondary/30 border-r border-border py-4 select-none flex-shrink-0">
@@ -328,11 +328,11 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
           {/* Editor area */}
           <div className={cn(
-            "flex-1 relative overflow-auto",
+            "flex-1 relative overflow-auto min-h-[500px]",
             drawingMode && "pointer-events-none opacity-50"
           )}>
             {/* Lines overlay for single-lined */}
-            {sheetType === 'single-lined' && (
+            {sheetType === 'single-lined' && showLineNumbers && (
               <div className="absolute inset-0 pointer-events-none py-4">
                 {Array.from({ length: lineCount }, (_, i) => (
                   <div key={i} className="border-b border-border/30" style={{ height: '24px' }} />
@@ -342,7 +342,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
             <EditorContent 
               editor={editor} 
-              className="prose prose-sm dark:prose-invert max-w-none p-4 min-h-full [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-full"
+              className="prose prose-sm dark:prose-invert max-w-none p-4 min-h-[500px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[500px]"
             />
           </div>
         </div>
