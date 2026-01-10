@@ -84,18 +84,18 @@ const MenuBar: React.FC<{ editor: Editor | null }> = ({ editor }) => {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1 p-2 bg-card rounded-lg border border-border mb-2">
+    <div className="flex flex-wrap items-center gap-1 p-1.5 sm:p-2 bg-card rounded-lg border border-border mb-2 overflow-x-auto">
       {/* Font Family */}
       <Select
         value={editor.getAttributes('textStyle').fontFamily || 'monospace'}
         onValueChange={(value) => editor.chain().focus().setFontFamily(value).run()}
       >
-        <SelectTrigger className="w-24 h-8 text-xs">
+        <SelectTrigger className="w-16 sm:w-24 h-7 sm:h-8 text-[10px] sm:text-xs shrink-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {FONT_FAMILIES.map((font) => (
-            <SelectItem key={font.value} value={font.value}>
+            <SelectItem key={font.value} value={font.value} className="text-xs sm:text-sm">
               <span style={{ fontFamily: font.value }}>{font.label}</span>
             </SelectItem>
           ))}
@@ -107,69 +107,69 @@ const MenuBar: React.FC<{ editor: Editor | null }> = ({ editor }) => {
         value={editor.getAttributes('textStyle').fontSize || '14'}
         onValueChange={setFontSize}
       >
-        <SelectTrigger className="w-16 h-8 text-xs">
+        <SelectTrigger className="w-14 sm:w-16 h-7 sm:h-8 text-[10px] sm:text-xs shrink-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {FONT_SIZES.map((size) => (
-            <SelectItem key={size} value={size}>{size}px</SelectItem>
+            <SelectItem key={size} value={size} className="text-xs sm:text-sm">{size}px</SelectItem>
           ))}
         </SelectContent>
       </Select>
 
-      <div className="w-px h-6 bg-border mx-1" />
+      <div className="w-px h-5 sm:h-6 bg-border mx-0.5 sm:mx-1 shrink-0" />
 
       {/* Bold */}
       <Button
         variant={editor.isActive('bold') ? 'default' : 'ghost'}
         size="icon"
-        className="h-8 w-8"
+        className="h-7 w-7 sm:h-8 sm:w-8 shrink-0"
         onClick={() => editor.chain().focus().toggleBold().run()}
         title="Bold (Ctrl+B)"
       >
-        <Bold className="h-4 w-4" />
+        <Bold className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </Button>
 
       {/* Italic */}
       <Button
         variant={editor.isActive('italic') ? 'default' : 'ghost'}
         size="icon"
-        className="h-8 w-8"
+        className="h-7 w-7 sm:h-8 sm:w-8 shrink-0"
         onClick={() => editor.chain().focus().toggleItalic().run()}
         title="Italic (Ctrl+I)"
       >
-        <Italic className="h-4 w-4" />
+        <Italic className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </Button>
 
       {/* Underline */}
       <Button
         variant={editor.isActive('underline') ? 'default' : 'ghost'}
         size="icon"
-        className="h-8 w-8"
+        className="h-7 w-7 sm:h-8 sm:w-8 shrink-0"
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         title="Underline (Ctrl+U)"
       >
-        <UnderlineIcon className="h-4 w-4" />
+        <UnderlineIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </Button>
 
       {/* Strikethrough */}
       <Button
         variant={editor.isActive('strike') ? 'default' : 'ghost'}
         size="icon"
-        className="h-8 w-8"
+        className="h-7 w-7 sm:h-8 sm:w-8 shrink-0"
         onClick={() => editor.chain().focus().toggleStrike().run()}
         title="Strikethrough"
       >
-        <Strikethrough className="h-4 w-4" />
+        <Strikethrough className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </Button>
 
-      <div className="w-px h-6 bg-border mx-1" />
+      <div className="w-px h-5 sm:h-6 bg-border mx-0.5 sm:mx-1 shrink-0" />
 
       {/* Highlight Color */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Highlight">
-            <Highlighter className="h-4 w-4" />
+          <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" title="Highlight">
+            <Highlighter className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-2">
@@ -185,7 +185,7 @@ const MenuBar: React.FC<{ editor: Editor | null }> = ({ editor }) => {
                   }
                 }}
                 className={cn(
-                  'w-7 h-7 rounded border-2 hover:scale-110 transition-transform',
+                  'w-6 h-6 sm:w-7 sm:h-7 rounded border-2 hover:scale-110 transition-transform active:scale-95',
                   color === 'transparent' ? 'border-dashed border-muted-foreground' : 'border-border'
                 )}
                 style={{ backgroundColor: color === 'transparent' ? 'transparent' : color }}
@@ -198,8 +198,8 @@ const MenuBar: React.FC<{ editor: Editor | null }> = ({ editor }) => {
       {/* Text Color */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Text Color">
-            <Palette className="h-4 w-4" />
+          <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" title="Text Color">
+            <Palette className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-2">
@@ -209,7 +209,7 @@ const MenuBar: React.FC<{ editor: Editor | null }> = ({ editor }) => {
                 key={color}
                 onClick={() => editor.chain().focus().setColor(color).run()}
                 className={cn(
-                  'w-7 h-7 rounded-full border-2 hover:scale-110 transition-transform',
+                  'w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 hover:scale-110 transition-transform active:scale-95',
                   'border-border'
                 )}
                 style={{ backgroundColor: color }}
@@ -310,15 +310,15 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </div>
         )}
 
-        <div className="flex h-full min-h-[500px]">
-          {/* Line numbers - optional */}
+        <div className="flex h-full min-h-[300px] sm:min-h-[500px]">
+          {/* Line numbers - optional, hidden on very small screens */}
           {showLineNumbers && sheetType !== 'clear' && (
-            <div className="w-12 bg-secondary/30 border-r border-border py-4 select-none flex-shrink-0">
+            <div className="hidden sm:block w-10 sm:w-12 bg-secondary/30 border-r border-border py-3 sm:py-4 select-none flex-shrink-0">
               {Array.from({ length: lineCount }, (_, i) => (
                 <div
                   key={i}
-                  className="text-xs text-muted-foreground text-right pr-3 font-mono"
-                  style={{ height: '24px', lineHeight: '24px' }}
+                  className="text-[10px] sm:text-xs text-muted-foreground text-right pr-2 sm:pr-3 font-mono"
+                  style={{ height: '22px', lineHeight: '22px' }}
                 >
                   {i + 1}
                 </div>
@@ -328,21 +328,21 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
           {/* Editor area */}
           <div className={cn(
-            "flex-1 relative overflow-auto min-h-[500px]",
+            "flex-1 relative overflow-auto min-h-[300px] sm:min-h-[500px]",
             drawingMode && "pointer-events-none opacity-50"
           )}>
             {/* Lines overlay for single-lined */}
             {sheetType === 'single-lined' && showLineNumbers && (
-              <div className="absolute inset-0 pointer-events-none py-4">
+              <div className="absolute inset-0 pointer-events-none py-3 sm:py-4">
                 {Array.from({ length: lineCount }, (_, i) => (
-                  <div key={i} className="border-b border-border/30" style={{ height: '24px' }} />
+                  <div key={i} className="border-b border-border/30" style={{ height: '22px' }} />
                 ))}
               </div>
             )}
 
             <EditorContent 
               editor={editor} 
-              className="prose prose-sm dark:prose-invert max-w-none p-4 min-h-[500px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[500px]"
+              className="prose prose-sm dark:prose-invert max-w-none p-3 sm:p-4 min-h-[300px] sm:min-h-[500px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[300px] sm:[&_.ProseMirror]:min-h-[500px] text-sm sm:text-base"
             />
           </div>
         </div>

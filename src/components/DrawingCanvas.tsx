@@ -176,7 +176,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     img.src = history[newIndex];
   }, [history, historyIndex, onSave]);
 
-  // Initialize and resize canvas
+  // Initialize and resize canvas with dynamic DPI support
   useEffect(() => {
     const canvas = canvasRef.current;
     const previewCanvas = previewCanvasRef.current;
@@ -189,6 +189,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
 
     const resizeCanvas = () => {
       const rect = container.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2); // Cap at 2x for performance
       
       // Store the current drawing
       const tempCanvas = document.createElement('canvas');
@@ -199,23 +200,39 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
         tempCtx.drawImage(canvas, 0, 0);
       }
 
-      // Resize canvases
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      previewCanvas.width = rect.width;
-      previewCanvas.height = rect.height;
-      canvasSize.current = { width: rect.width, height: rect.height };
+      // Resize canvases with DPI scaling
+      const displayWidth = rect.width;
+      const displayHeight = rect.height;
+      
+      canvas.width = displayWidth * dpr;
+      canvas.height = displayHeight * dpr;
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
+      
+      previewCanvas.width = displayWidth * dpr;
+      previewCanvas.height = displayHeight * dpr;
+      previewCanvas.style.width = `${displayWidth}px`;
+      previewCanvas.style.height = `${displayHeight}px`;
+      
+      // Scale context for DPI
+      ctx.scale(dpr, dpr);
+      previewCtx.scale(dpr, dpr);
+      
+      canvasSize.current = { width: displayWidth, height: displayHeight };
 
       // Clear and restore
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, displayWidth, displayHeight);
       
       // Restore previous drawing or load initial data
       if (tempCtx && tempCanvas.width > 0) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
         ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
       } else if (initialData) {
         const img = new Image();
         img.onload = () => {
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
           // Save initial state to history
           saveToHistory();
         };
@@ -374,6 +391,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
 
   const isShapeTool = tool !== 'pen' && tool !== 'eraser';
 
+  // Track the current mouse position during shape drawing
+  const currentPoint = useRef<{ x: number; y: number } | null>(null);
+
   const startDrawing = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const point = getCanvasPoint(e);
     if (!point) return;
@@ -381,6 +401,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     setIsDrawing(true);
     lastPoint.current = point;
     startPoint.current = point;
+    currentPoint.current = point;
   }, [getCanvasPoint]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -393,13 +414,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
       cursorRef.current.style.display = 'block';
     }
 
-    if (!isDrawing) return;
+    if (!isDrawing || !point) return;
+
+    // Always update current point for shape tools
+    currentPoint.current = point;
 
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     const previewCanvas = previewCanvasRef.current;
     const previewCtx = previewCanvas?.getContext('2d');
-    if (!canvas || !ctx || !lastPoint.current || !point) return;
+    if (!canvas || !ctx || !lastPoint.current) return;
 
     if (isShapeTool && startPoint.current && previewCtx && previewCanvas) {
       // Clear preview and draw shape preview
@@ -454,17 +478,29 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     }
   }, [isDrawing, onSave, saveToHistory]);
 
-  const stopDrawing = useCallback(() => {
+  const stopDrawing = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     const previewCanvas = previewCanvasRef.current;
     const previewCtx = previewCanvas?.getContext('2d');
     
+    // Get final point from event if available, otherwise use tracked current point
+    let finalPoint = currentPoint.current;
+    if (e) {
+      const eventPoint = getCanvasPoint(e);
+      if (eventPoint) finalPoint = eventPoint;
+    }
+    
     // If it's a shape tool, finalize the shape on main canvas
-    if (isShapeTool && startPoint.current && lastPoint.current && ctx && canvas) {
-      const point = lastPoint.current;
-      ctx.globalCompositeOperation = 'source-over';
-      drawShape(ctx, tool, startPoint.current, point, color, brushSize);
+    if (isShapeTool && startPoint.current && finalPoint && ctx && canvas) {
+      // Only draw shape if there's actual movement (not just a click)
+      const dx = Math.abs(finalPoint.x - startPoint.current.x);
+      const dy = Math.abs(finalPoint.y - startPoint.current.y);
+      if (dx > 3 || dy > 3) {
+        ctx.globalCompositeOperation = 'source-over';
+        drawShape(ctx, tool, startPoint.current, finalPoint, color, brushSize);
+        hasChanges.current = true;
+      }
     }
     
     // Clear preview canvas
@@ -481,7 +517,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
     setIsDrawing(false);
     lastPoint.current = null;
     startPoint.current = null;
-  }, [isDrawing, onSave, isShapeTool, tool, color, brushSize, drawShape, saveToHistory]);
+    currentPoint.current = null;
+  }, [isDrawing, onSave, isShapeTool, tool, color, brushSize, drawShape, saveToHistory, getCanvasPoint]);
 
   const clearCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -514,37 +551,40 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
   };
 
   return (
-    <div className={cn("flex flex-col", className)}>
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 p-2 bg-card rounded-lg border border-border mb-2 flex-wrap">
+    <div className={cn("flex flex-col h-full", className)}>
+      {/* Toolbar - responsive for mobile */}
+      <div className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-card rounded-lg border border-border mb-2 flex-wrap overflow-x-auto">
         <Button
           variant={tool === 'pen' ? 'default' : 'ghost'}
           size="icon"
+          className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
           onClick={() => setTool('pen')}
           title="Pen"
         >
-          <Pencil className="h-4 w-4" />
+          <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Button>
 
         <Button
           variant={tool === 'eraser' ? 'default' : 'ghost'}
           size="icon"
+          className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
           onClick={() => setTool('eraser')}
           title="Eraser"
         >
-          <Eraser className="h-4 w-4" />
+          <Eraser className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Button>
 
-        <div className="w-px h-6 bg-border mx-1" />
+        <div className="w-px h-5 sm:h-6 bg-border mx-0.5 sm:mx-1 shrink-0" />
 
         {/* Line Tool */}
         <Button
           variant={tool === 'line' ? 'default' : 'ghost'}
           size="icon"
+          className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
           onClick={() => setTool('line')}
           title="Line"
         >
-          <Minus className="h-4 w-4 rotate-[-45deg]" />
+          <Minus className="h-3.5 w-3.5 sm:h-4 sm:w-4 rotate-[-45deg]" />
         </Button>
 
         {/* Shape Selector */}
@@ -553,26 +593,27 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
             <Button 
               variant={COMMON_SHAPES.includes(tool) || UNCOMMON_SHAPES.includes(tool) ? 'default' : 'ghost'} 
               size="icon"
+              className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
               title="Shapes"
             >
               {(COMMON_SHAPES.includes(tool) || UNCOMMON_SHAPES.includes(tool)) && tool !== 'line' 
                 ? SHAPE_ICONS[tool] 
-                : <Shapes className="h-4 w-4" />
+                : <Shapes className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               }
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="bg-popover border border-border z-50">
-            <DropdownMenuLabel>Common Shapes</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs sm:text-sm">Common Shapes</DropdownMenuLabel>
             {COMMON_SHAPES.filter(s => s !== 'line').map((shape) => (
-              <DropdownMenuItem key={shape} onClick={() => setTool(shape)} className="flex items-center gap-2 cursor-pointer">
+              <DropdownMenuItem key={shape} onClick={() => setTool(shape)} className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm">
                 {SHAPE_ICONS[shape]}
                 <span className="capitalize">{shape}</span>
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>More Shapes</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs sm:text-sm">More Shapes</DropdownMenuLabel>
             {UNCOMMON_SHAPES.map((shape) => (
-              <DropdownMenuItem key={shape} onClick={() => setTool(shape)} className="flex items-center gap-2 cursor-pointer">
+              <DropdownMenuItem key={shape} onClick={() => setTool(shape)} className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm">
                 {SHAPE_ICONS[shape]}
                 <span className="capitalize">{shape}</span>
               </DropdownMenuItem>
@@ -580,13 +621,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="w-px h-6 bg-border mx-1" />
+        <div className="w-px h-5 sm:h-6 bg-border mx-0.5 sm:mx-1 shrink-0" />
 
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" title="Color">
+            <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0" title="Color">
               <div 
-                className="w-5 h-5 rounded-full border-2 border-border"
+                className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-border"
                 style={{ backgroundColor: color }}
               />
             </Button>
@@ -598,7 +639,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
                   key={c}
                   onClick={() => setColor(c)}
                   className={cn(
-                    'w-7 h-7 rounded-full border-2 hover:scale-110 transition-transform',
+                    'w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 hover:scale-110 transition-transform active:scale-95',
                     color === c ? 'border-primary' : 'border-border'
                   )}
                   style={{ backgroundColor: c }}
@@ -608,7 +649,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
           </PopoverContent>
         </Popover>
 
-        <div className="flex items-center gap-2 ml-1">
+        {/* Brush size - hidden on very small screens, shown in popover */}
+        <div className="hidden sm:flex items-center gap-2 ml-1">
           <Minus className="h-3 w-3 text-muted-foreground" />
           <Slider
             value={[brushSize]}
@@ -616,7 +658,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
             min={1}
             max={20}
             step={1}
-            className="w-20"
+            className="w-16 sm:w-20"
           />
           <div className="w-5 h-5 flex items-center justify-center">
             <div 
@@ -626,37 +668,70 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(({
           </div>
         </div>
 
-        <div className="w-px h-6 bg-border mx-1" />
+        {/* Mobile brush size popover */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden shrink-0" title="Brush Size">
+              <div 
+                className="rounded-full bg-foreground"
+                style={{ width: Math.max(brushSize, 6), height: Math.max(brushSize, 6), maxWidth: 16, maxHeight: 16 }}
+              />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-3 bg-popover border border-border z-50">
+            <div className="flex items-center gap-2">
+              <Minus className="h-3 w-3 text-muted-foreground shrink-0" />
+              <Slider
+                value={[brushSize]}
+                onValueChange={(v) => setBrushSize(v[0])}
+                min={1}
+                max={20}
+                step={1}
+                className="flex-1"
+              />
+              <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                <div 
+                  className="rounded-full bg-foreground"
+                  style={{ width: brushSize, height: brushSize }}
+                />
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <div className="w-px h-5 sm:h-6 bg-border mx-0.5 sm:mx-1 shrink-0" />
 
         {/* Undo/Redo */}
         <Button 
           variant="ghost" 
-          size="icon" 
+          size="icon"
+          className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
           onClick={undo} 
           disabled={historyIndex <= 0}
           title="Undo"
         >
-          <Undo2 className="h-4 w-4" />
+          <Undo2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Button>
 
         <Button 
           variant="ghost" 
-          size="icon" 
+          size="icon"
+          className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
           onClick={redo} 
           disabled={historyIndex >= history.length - 1}
           title="Redo"
         >
-          <Redo2 className="h-4 w-4" />
+          <Redo2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Button>
 
-        <div className="w-px h-6 bg-border mx-1" />
+        <div className="w-px h-5 sm:h-6 bg-border mx-0.5 sm:mx-1 shrink-0" />
 
-        <Button variant="ghost" size="icon" onClick={clearCanvas} title="Clear Canvas">
-          <Trash2 className="h-4 w-4" />
+        <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0" onClick={clearCanvas} title="Clear Canvas">
+          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Button>
 
-        <Button variant="ghost" size="icon" onClick={downloadCanvas} title="Download">
-          <Download className="h-4 w-4" />
+        <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0" onClick={downloadCanvas} title="Download">
+          <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Button>
       </div>
 
