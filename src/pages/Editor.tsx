@@ -177,25 +177,27 @@ const Editor: React.FC = () => {
       
       {/* Header */}
       <header className="glass border-b border-border sticky top-0 z-50" style={{ top: isInCall ? '52px' : 0 }}>
-        <div className="px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft className="h-4 w-4" />
+        <div className="px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9" onClick={() => navigate('/dashboard')}>
+              <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Button>
-            <Logo size="sm" />
+            <div className="hidden sm:block">
+              <Logo size="sm" />
+            </div>
           </div>
 
-          <div className="flex-1 max-w-md">
+          <div className="flex-1 max-w-[150px] sm:max-w-md">
             <Input
               value={currentProject.name}
               onChange={(e) => handleNameChange(e.target.value)}
-              className="text-center font-medium bg-transparent border-transparent hover:bg-secondary/50 focus:bg-secondary/50"
+              className="text-center text-sm sm:text-base font-medium bg-transparent border-transparent hover:bg-secondary/50 focus:bg-secondary/50 h-8 sm:h-10"
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Save status */}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* Save status - hidden on very small screens */}
+            <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
               {isSaving ? (
                 <span className="animate-pulse">Saving...</span>
               ) : lastSaved ? (
@@ -210,82 +212,85 @@ const Editor: React.FC = () => {
 
             <ThemeToggle />
 
-            <CollaboratorsList
-              projectId={currentProject.id}
-              collaborators={currentProject.collaborators}
-              ownerId={currentProject.ownerId}
-              ownerUsername={currentProject.ownerUsername}
-            />
+            <div className="hidden sm:block">
+              <CollaboratorsList
+                projectId={currentProject.id}
+                collaborators={currentProject.collaborators}
+                ownerId={currentProject.ownerId}
+                ownerUsername={currentProject.ownerUsername}
+              />
+            </div>
 
-            <Button onClick={handleSave} size="sm" className="gap-2" disabled={isSaving || !hasUnsavedChanges}>
-              <Save className="h-4 w-4" />
+            <Button onClick={handleSave} size="sm" className="gap-1.5 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3" disabled={isSaving || !hasUnsavedChanges}>
+              <Save className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Save</span>
             </Button>
           </div>
         </div>
 
         {/* Toolbar */}
-        <div className="px-4 py-2 border-t border-border/50 flex items-center gap-4 flex-wrap">
+        <div className="px-2 sm:px-4 py-1.5 sm:py-2 border-t border-border/50 flex items-center gap-2 sm:gap-4 flex-wrap overflow-x-auto">
           {/* Mode Toggle */}
-          <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-1">
+          <div className="flex items-center gap-0.5 sm:gap-1 bg-secondary/50 rounded-lg p-0.5 sm:p-1 shrink-0">
             <Button
               variant={mode === 'write' ? 'default' : 'ghost'}
               size="sm"
-              className="gap-2 h-7"
+              className="gap-1 sm:gap-2 h-6 sm:h-7 px-2 sm:px-3 text-xs"
               onClick={() => setMode('write')}
             >
               <Type className="h-3 w-3" />
-              Write
+              <span className="hidden sm:inline">Write</span>
             </Button>
             <Button
               variant={mode === 'draw' ? 'default' : 'ghost'}
               size="sm"
-              className="gap-2 h-7"
+              className="gap-1 sm:gap-2 h-6 sm:h-7 px-2 sm:px-3 text-xs"
               onClick={() => setMode('draw')}
             >
               <Pencil className="h-3 w-3" />
-              Draw
+              <span className="hidden sm:inline">Draw</span>
             </Button>
           </div>
 
           <Select value={currentProject.sheetType} onValueChange={handleSheetTypeChange}>
-            <SelectTrigger className="w-40 h-8 text-xs">
+            <SelectTrigger className="w-28 sm:w-40 h-7 sm:h-8 text-[10px] sm:text-xs shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="glass">
-              <SelectItem value="single-lined">
+              <SelectItem value="single-lined" className="text-xs sm:text-sm">
                 <div className="flex items-center gap-2">
                   <AlignLeft className="h-3 w-3" />
-                  Single Lined
+                  <span className="hidden sm:inline">Single </span>Lined
                 </div>
               </SelectItem>
-              <SelectItem value="crosslined">
+              <SelectItem value="crosslined" className="text-xs sm:text-sm">
                 <div className="flex items-center gap-2">
                   <Grid3X3 className="h-3 w-3" />
-                  Cross Lined
+                  <span className="hidden sm:inline">Cross </span>Grid
                 </div>
               </SelectItem>
-              <SelectItem value="clear">
+              <SelectItem value="clear" className="text-xs sm:text-sm">
                 <div className="flex items-center gap-2">
                   <FileText className="h-3 w-3" />
-                  Clear Sheet
+                  Clear
                 </div>
               </SelectItem>
-              <SelectItem value="dot-pattern">
+              <SelectItem value="dot-pattern" className="text-xs sm:text-sm">
                 <div className="flex items-center gap-2">
                   <Circle className="h-3 w-3" />
-                  Dot Pattern
+                  Dots
                 </div>
               </SelectItem>
             </SelectContent>
           </Select>
 
-          {/* Line Numbers Toggle */}
-          <div className="flex items-center gap-2">
+          {/* Line Numbers Toggle - hidden on mobile */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             <Switch
               id="line-numbers"
               checked={showLineNumbers}
               onCheckedChange={setShowLineNumbers}
+              className="scale-90 sm:scale-100"
             />
             <Label htmlFor="line-numbers" className="text-xs text-muted-foreground flex items-center gap-1">
               <Hash className="h-3 w-3" />
@@ -293,8 +298,8 @@ const Editor: React.FC = () => {
             </Label>
           </div>
 
-          <div className="text-xs text-muted-foreground">
-            {content.length} characters
+          <div className="text-[10px] sm:text-xs text-muted-foreground shrink-0">
+            {content.length} chars
           </div>
         </div>
       </header>
